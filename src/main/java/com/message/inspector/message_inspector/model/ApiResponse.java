@@ -1,0 +1,9 @@
+package com.message.inspector.message_inspector.model;
+
+import lombok.Data;
+
+@Data
+public class ApiResponse {
+  private boolean success;
+  private String message;
+}

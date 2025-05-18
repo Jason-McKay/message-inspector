@@ -1,0 +1,155 @@
+package com.message.inspector.message_inspector.repository;
+
+import com.message.inspector.message_inspector.model.JmsMessageDto;
+import jakarta.jms.*;
+import lombok.RequiredArgsConstructor;
+import org.springframework.jms.core.JmsTemplate;
+import org.springframework.jms.core.MessagePostProcessor;
+import org.springframework.stereotype.Repository;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.List;
+import java.util.Map;
+
+@Repository
+@RequiredArgsConstructor
+public class JmsMessageRepository {
+
+  private final JmsTemplate jmsTemplate;
+
+  public static final String DLQ_NAME = "DLQ_test"; // Dead Letter Queue name
+
+  /**
+   * Fetch all messages from a given queue.
+   */
+  public List<JmsMessageDto> getMessagesFromQueue(String queueName) throws JMSException {
+    List<JmsMessageDto> messages = new ArrayList<>();
+
+    jmsTemplate.browse(queueName, (session, browser) -> {
+      Enumeration<?> enumeration = browser.getEnumeration();
+      while (enumeration.hasMoreElements()) {
+        Message message = (Message) enumeration.nextElement();
+        messages.add(convertToDto(message));
+      }
+      return null;
+    });
+
+    return messages;
+  }
+
+  /**
+   * Fetch a specific message by its unique ID.
+   */
+  public JmsMessageDto getMessageById(String queueName, String messageId) throws JMSException {
+    // Assuming Artemis supports filtering messages by ID
+    return jmsTemplate.browseSelected(
+      queueName,
+      "JMSMessageID='" + messageId + "'",
+      (session, browser) -> {
+        Enumeration<?> enumeration = browser.getEnumeration();
+        if (enumeration.hasMoreElements()) {
+          return convertToDto((Message) enumeration.nextElement());
+        }
+        return null;
+      }
+    );
+  }
+
+  /**
+   * Send a message to a queue.
+   */
+  public void sendMessage(String queueName, JmsMessageDto messageDto) {
+    jmsTemplate.convertAndSend(queueName, messageDto.getPayload(), new MessagePostProcessor() {
+      @Override
+      public Message postProcessMessage(Message message) throws JMSException {
+        message.setJMSCorrelationID(messageDto.getMessageId());
+        return message;
+      }
+    });
+  }
+
+  /**
+   * Delete a message by ID (if applicable).
+   */
+  public void deleteMessageById(String queueName, String messageId) throws JMSException {
+    // JMS does not support direct message deletion, so this requires an alternative approach.
+    // The below will consume the message selectively with a filter, ensuring it does not get reprocessed.
+
+    jmsTemplate.execute(session -> {
+      Queue queue = session.createQueue(queueName);
+      MessageConsumer consumer = session.createConsumer(queue, "JMSMessageID='" + messageId + "'");
+
+      Message message = consumer.receive(5000); // 5-second timeout
+
+      if (message != null) {
+        System.out.println("Deleting message: " + message.getJMSMessageID());
+        message.acknowledge(); // Marks the message as consumed, preventing reprocessing
+      } else {
+        System.out.println("No matching message found for deletion.");
+      }
+
+      consumer.close();
+      return null;
+    }, true);
+  }
+
+  /**
+   * Moves a message to the Dead Letter Queue (DLQ) instead of deleting it permanently.
+   */
+  public void moveToDeadLetterQueue(String queueName, String messageId) throws JMSException {
+    jmsTemplate.execute(session -> {
+      Queue queue = session.createQueue(queueName);
+
+      MessageConsumer consumer = session.createConsumer(queue, "JMSMessageID='" + messageId + "'");
+      Message message = consumer.receive(5000); // 5-second timeout
+
+      if (message != null) {
+        // Convert to DTO and send to DLQ
+        JmsMessageDto dto = convertToDto(message);
+        sendMessage(DLQ_NAME, dto);
+
+        // Acknowledge and commit transaction
+        message.acknowledge();
+      } else {
+        System.out.println("No matching message found to move.");
+      }
+
+      consumer.close();
+      return null;
+    }, true);
+  }
+
+  /**
+   * Convert JMS Message to DTO
+   */
+  private JmsMessageDto convertToDto(Message message) throws JMSException {
+    if (message instanceof TextMessage textMessage) {
+      // 2) Extract the payload and headers from the message
+      return new JmsMessageDto(
+        message.getJMSMessageID(),
+        textMessage.getText(),
+        message.getJMSDestination().toString(),
+        String.valueOf(message.getJMSTimestamp()),
+        extractHeaders(message)
+      );
+    }
+    throw new IllegalArgumentException("Unsupported message type.");
+  }
+
+  /**
+   * Extract headers from the JMS message
+   */
+  private Map<String, String> extractHeaders(Message message) {
+    Map<String, String> headers = new java.util.HashMap<>();
+    try {
+      Enumeration<?> propertyNames = message.getPropertyNames();
+      while (propertyNames.hasMoreElements()) {
+        String propertyName = (String) propertyNames.nextElement();
+        headers.put(propertyName, message.getStringProperty(propertyName));
+      }
+    } catch (JMSException e) {
+      System.out.println("JmsMessageRepository.java Error extracting headers: " + e.getMessage());
+    }
+    return headers;
+  }
+}

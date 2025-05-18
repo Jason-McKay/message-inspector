@@ -1,0 +1,61 @@
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+out/
+gen/
+
+# Compiler output
+/build/
+/target/
+
+# Logs
+*.log
+
+# Temporary files
+*.class
+*.swp
+*.tmp
+*.bak
+*.DS_Store
+*.orig
+
+# Mac OS
+.DS_Store
+
+# Windows
+Thumbs.db
+ehthumbs.db
+desktop.ini
+
+# Gradle
+.gradle/
+build/
+
+# Maven
+target/
+pom.xml.tag
+pom.xml.releaseBackup
+pom.xml.versionsBackup
+pom.xml.next
+release.properties
+
+# Eclipse (if used)
+.project
+.classpath
+.settings/
+bin/
+
+# VS Code (if used)
+.vscode/
+
+# Test reports
+test-output/
+
+# Coverage reports
+coverage/
+jacoco*.exec
+
+# Local environment files
+.env
+.env.*
