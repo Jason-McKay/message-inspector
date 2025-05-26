@@ -22,7 +22,7 @@ public class JolokiaRepository {
   @Value("${jolokia.url}") String jolokiaUrl;
   @Value("${jolokia.brokerName}") private String brokerName;
 
-  public List<JmsQueueDto> fetchQueuesWithJolokia() {
+  public List<com.message.inspector.message_inspector.model.JmsQueueDto> fetchQueuesWithJolokia() {
     List<JmsQueueDto> queueList = new ArrayList<>();
 
     try {
