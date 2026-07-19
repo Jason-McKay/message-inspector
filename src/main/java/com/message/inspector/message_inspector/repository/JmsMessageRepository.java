@@ -10,6 +10,7 @@ import java.util.ArrayList;
 import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 @Repository
 @RequiredArgsConstructor
@@ -18,6 +19,29 @@ public class JmsMessageRepository {
   private final JmsTemplate jmsTemplate;
 
   public static final String DLQ_NAME = "DLQ_test"; // Dead Letter Queue name
+
+  /**
+   * Characters permitted in a JMS message ID. Deliberately narrow: Artemis IDs are
+   * "ID:" followed by a UUID, so this covers real IDs while excluding the quote that
+   * would otherwise let a caller break out of the selector literal below.
+   */
+  private static final Pattern SAFE_MESSAGE_ID = Pattern.compile("[A-Za-z0-9:_.-]{1,255}");
+
+  /**
+   * Guards against JMS selector injection.
+   * <p>
+   * The selectors in this class are built by string concatenation, so an ID such as
+   * {@code x' OR '1'='1} would otherwise widen the selector to match every message on
+   * the queue — causing the wrong message to be read, consumed or moved to the DLQ.
+   *
+   * @throws IllegalArgumentException if the ID is null, empty or contains unsafe characters
+   */
+  private static String requireValidMessageId(String messageId) {
+    if (messageId == null || !SAFE_MESSAGE_ID.matcher(messageId).matches()) {
+      throw new IllegalArgumentException("Invalid message ID: " + messageId);
+    }
+    return messageId;
+  }
 
   /**
    * Fetch all messages from a given queue.
@@ -41,6 +65,8 @@ public class JmsMessageRepository {
    * Fetch a specific message by its unique ID.
    */
   public JmsMessageDto getMessageById(String queueName, String messageId) throws JMSException {
+    requireValidMessageId(messageId);
+
     // Assuming Artemis supports filtering messages by ID
     return jmsTemplate.browseSelected(
       queueName,
@@ -74,6 +100,7 @@ public class JmsMessageRepository {
   public void deleteMessageById(String queueName, String messageId) throws JMSException {
     // JMS does not support direct message deletion, so this requires an alternative approach.
     // The below will consume the message selectively with a filter, ensuring it does not get reprocessed.
+    requireValidMessageId(messageId);
 
     jmsTemplate.execute(session -> {
       Queue queue = session.createQueue(queueName);
@@ -97,6 +124,8 @@ public class JmsMessageRepository {
    * Moves a message to the Dead Letter Queue (DLQ) instead of deleting it permanently.
    */
   public void moveToDeadLetterQueue(String queueName, String messageId) throws JMSException {
+    requireValidMessageId(messageId);
+
     jmsTemplate.execute(session -> {
       Queue queue = session.createQueue(queueName);
 
