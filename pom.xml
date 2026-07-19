@@ -160,7 +160,12 @@
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>3.2.5</version>
                 <configuration>
-                    <argLine>-Djdk.attach.allowAttachSelf -XX:+EnableDynamicAgentLoading</argLine>
+                    <!-- api.version pins the Docker API version used by docker-java (via Testcontainers).
+                         Its default (1.32) is below the 1.40 minimum enforced by Docker Engine 29+, which
+                         rejects it with an empty HTTP 400 from /info and makes every Testcontainers test
+                         fail with "Could not find a valid Docker environment". Note DOCKER_API_VERSION is
+                         a docker-CLI-only variable; docker-java reads this system property instead. -->
+                    <argLine>-Djdk.attach.allowAttachSelf -XX:+EnableDynamicAgentLoading -Dapi.version=1.44</argLine>
                 </configuration>
             </plugin>
 

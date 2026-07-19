@@ -3,6 +3,7 @@ package com.message.inspector.message_inspector.service;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import com.message.inspector.message_inspector.model.ApiResponse;
 import com.message.inspector.message_inspector.model.JmsMessageDto;
 import com.message.inspector.message_inspector.repository.JmsMessageRepository;
 import jakarta.jms.JMSException;
@@ -124,7 +125,10 @@ class MessageServiceTest {
   void testDeleteMessage_JMSException() throws JMSException {
     doThrow(new JMSException("Delete failed")).when(jmsMessageRepository).deleteMessageById(QUEUE_NAME, "bad-id");
 
-    assertThrows(JMSException.class, () -> messageService.deleteMessage(QUEUE_NAME, "bad-id"));
+    ApiResponse response = messageService.deleteMessage(QUEUE_NAME, "bad-id");
+
+    assertFalse(response.isSuccess());
+    assertTrue(response.getMessage().contains("Delete failed"));
   }
 
   /**
@@ -140,6 +144,9 @@ class MessageServiceTest {
   void testMoveMessageToDLQ_JMSException() throws JMSException {
     doThrow(new JMSException("Move failed")).when(jmsMessageRepository).moveToDeadLetterQueue(QUEUE_NAME, "bad-id");
 
-    assertThrows(JMSException.class, () -> messageService.moveMessageToDLQ(QUEUE_NAME, "bad-id"));
+    ApiResponse response = messageService.moveMessageToDLQ(QUEUE_NAME, "bad-id");
+
+    assertFalse(response.isSuccess());
+    assertTrue(response.getMessage().contains("Move failed"));
   }
 }
