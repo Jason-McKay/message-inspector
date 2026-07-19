@@ -73,7 +73,7 @@ public class JolokiaRepository {
         null,
         getParameterizedTypeReference());
 
-      logResponse("fetchQueueNamesWithJolokia", responseEntity.getStatusCode().value(), responseEntity.getHeaders(), responseEntity.getBody().toString(), responseEntity.getBody() != null, responseEntity.getBody().getValue().toString());
+      logResponse("fetchQueueNamesWithJolokia", responseEntity);
 
       JolokiaResponse<List<String>> response = responseEntity.getBody();
 
@@ -108,5 +108,21 @@ public class JolokiaRepository {
     System.out.println("Response Body: " + body);
     assert isBody;
     System.out.println("Response Body (value):  " + bodyPayload);
+  }
+
+  private void logResponse(String responseType, ResponseEntity<JolokiaResponse<List<String>>> responseEntity) {
+    //int statusCode, HttpHeaders headers, String body, boolean isBody, String bodyPayload) {
+    //responseEntity.getStatusCode().value(), responseEntity.getHeaders(), responseEntity.getBody().toString(), responseEntity.getBody() != null, responseEntity.getBody().getValue().toString()
+    try {
+      System.out.println("Response Type: " + responseType);
+      System.out.println("Response Status Code: " + responseEntity.getStatusCode().value());
+      System.out.println("Response Headers: " + responseEntity.getHeaders());
+      System.out.println("Response Body: " + responseEntity.getBody());
+      Object value = responseEntity.getBody() != null ? responseEntity.getBody().getValue() : null;
+      System.out.println("Response Body (value):  " + (value != null ? value.toString() : "null"));
+
+    } catch (Exception e) {
+      System.out.println("Failed to log error: " + e.getMessage());
+    }
   }
 }
