@@ -171,6 +171,16 @@
                 <version>12.2.2</version>
                 <configuration>
                     <nvdApiKey>${nvd.api.key}</nvdApiKey>
+                    <suppressionFiles>
+                        <suppressionFile>dependency-check-suppressions.xml</suppressionFile>
+                    </suppressionFiles>
+                    <!-- 11 is above the maximum CVSS score of 10, so nothing fails the
+                         build. Set explicitly rather than left to default so the value is
+                         visible and the intent is on the record: reporting only, until the
+                         remaining findings have been triaged. Lower it (7 or 8 is typical)
+                         once suppressions exist for what has been judged inapplicable;
+                         that is what turns this into a real gate for the Phase 7 CI. -->
+                    <failBuildOnCVSS>11</failBuildOnCVSS>
                 </configuration>
                 <executions>
                     <execution>
