@@ -1,4 +1,4 @@
-package com.message.inspector.message_inspector.model;
+package com.message.inspector.message_inspector.dto;
 
 import lombok.Data;
 

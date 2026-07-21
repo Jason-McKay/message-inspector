@@ -1,7 +1,7 @@
 package com.message.inspector.message_inspector.controller;
 
-import com.message.inspector.message_inspector.model.JmsMessageDto;
-import com.message.inspector.message_inspector.model.ApiResponse;
+import com.message.inspector.message_inspector.dto.JmsMessageDto;
+import com.message.inspector.message_inspector.dto.ApiResponse;
 import com.message.inspector.message_inspector.service.MessageService;
 import jakarta.jms.JMSException;
 import lombok.RequiredArgsConstructor;

@@ -6,9 +6,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
-import com.message.inspector.message_inspector.model.JmsQueueDto;
-import com.message.inspector.message_inspector.model.JolokiaReadResponse;
-import com.message.inspector.message_inspector.model.JolokiaResponse;
+import com.message.inspector.message_inspector.dto.JmsQueueDto;
+import com.message.inspector.message_inspector.dto.JolokiaReadResponse;
+import com.message.inspector.message_inspector.dto.JolokiaResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;

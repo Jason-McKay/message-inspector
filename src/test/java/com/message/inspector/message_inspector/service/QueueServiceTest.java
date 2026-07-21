@@ -1,6 +1,6 @@
 package com.message.inspector.message_inspector.service;
 
-import com.message.inspector.message_inspector.model.JmsQueueDto;
+import com.message.inspector.message_inspector.dto.JmsQueueDto;
 import com.message.inspector.message_inspector.integration.artemis.JmsQueueRepository;
 import jakarta.jms.JMSException;
 import org.junit.jupiter.api.Test;

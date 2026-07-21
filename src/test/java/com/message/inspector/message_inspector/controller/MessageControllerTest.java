@@ -14,8 +14,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.message.inspector.message_inspector.model.ApiResponse;
-import com.message.inspector.message_inspector.model.JmsMessageDto;
+import com.message.inspector.message_inspector.dto.ApiResponse;
+import com.message.inspector.message_inspector.dto.JmsMessageDto;
 import com.message.inspector.message_inspector.security.SecurityConfig;
 import com.message.inspector.message_inspector.service.MessageService;
 import jakarta.jms.JMSException;

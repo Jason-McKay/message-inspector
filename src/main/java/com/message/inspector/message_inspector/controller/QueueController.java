@@ -1,7 +1,7 @@
 package com.message.inspector.message_inspector.controller;
 
-import com.message.inspector.message_inspector.model.JmsQueueDto;
-import com.message.inspector.message_inspector.model.JolokiaResponse;
+import com.message.inspector.message_inspector.dto.JmsQueueDto;
+import com.message.inspector.message_inspector.dto.JolokiaResponse;
 import com.message.inspector.message_inspector.service.QueuePreferenceService;
 import com.message.inspector.message_inspector.service.QueueService;
 import jakarta.jms.JMSException;

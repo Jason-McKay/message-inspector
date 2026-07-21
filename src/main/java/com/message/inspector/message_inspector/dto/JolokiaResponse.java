@@ -1,4 +1,4 @@
-package com.message.inspector.message_inspector.model;
+package com.message.inspector.message_inspector.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;

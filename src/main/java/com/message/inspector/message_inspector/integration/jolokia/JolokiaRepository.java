@@ -1,8 +1,8 @@
 package com.message.inspector.message_inspector.integration.jolokia;
 
-import com.message.inspector.message_inspector.model.JmsQueueDto;
-import com.message.inspector.message_inspector.model.JolokiaReadResponse;
-import com.message.inspector.message_inspector.model.JolokiaResponse;
+import com.message.inspector.message_inspector.dto.JmsQueueDto;
+import com.message.inspector.message_inspector.dto.JolokiaReadResponse;
+import com.message.inspector.message_inspector.dto.JolokiaResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
@@ -22,7 +22,7 @@ public class JolokiaRepository {
   @Value("${jolokia.url}") String jolokiaUrl;
   @Value("${jolokia.brokerName}") private String brokerName;
 
-  public List<com.message.inspector.message_inspector.model.JmsQueueDto> fetchQueuesWithJolokia() {
+  public List<com.message.inspector.message_inspector.dto.JmsQueueDto> fetchQueuesWithJolokia() {
     List<JmsQueueDto> queueList = new ArrayList<>();
 
     try {

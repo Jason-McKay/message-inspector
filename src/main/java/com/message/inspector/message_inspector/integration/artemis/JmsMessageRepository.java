@@ -1,6 +1,6 @@
 package com.message.inspector.message_inspector.integration.artemis;
 
-import com.message.inspector.message_inspector.model.JmsMessageDto;
+import com.message.inspector.message_inspector.dto.JmsMessageDto;
 import jakarta.jms.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.jms.core.JmsTemplate;
