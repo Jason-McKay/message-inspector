@@ -48,11 +48,47 @@ Swagger UI: `http://localhost:8080/api/swagger-ui.html`; OpenAPI JSON at `/api/a
 - `MessageServiceIT` **never runs**. There is no failsafe plugin and surefire does not
   match `*IT`, so the reported test count excludes it. It is a real `@SpringBootTest`
   against a live broker with a pre-seeded `testQueue`, so it will not pass unattended.
+  (Passing an explicit `-Dtest=...` filter overrides surefire's includes and *will* drag
+  it into the run, where it fails without a broker. Not a regression.)
+- **No test opens a JMS connection**, so a green suite says nothing about broker
+  behaviour. `SecurityConfigTest` is the only test that exercises the real filter chain
+  and the live Jolokia path — which also means **it fails if the infra is down**, and
+  that reads as a test failure rather than a missing container. Bring `../infrastructure`
+  up before trusting a red run.
+- **Verify JMS changes by hand.** Boot the app, produce with
+  `MSYS_NO_PATHCONV=1 docker exec dev-artemis /opt/activemq-artemis/bin/artemis producer
+  --url tcp://localhost:61616 --destination queue://DLQ --message-count 3 --user admin
+  --password admin`, then exercise browse / get-by-id / delete / resend / move-to-dlq.
+  This pass has caught real bugs the suite could not see. Clean up afterwards: purge the
+  DLQ and delete any `DLQ_test` or `ActiveMQQueue[DLQ]` addresses it leaves behind.
+- **`spring-boot:run` in the background outlives its Maven wrapper.** Killing the wrapper
+  task leaves the forked JVM holding :8080, and the next run fails with "Port 8080 was
+  already in use". Kill the `java` process by port, not the wrapper.
 
 ## Architecture
 
-Standard controller → service → repository layering under
-`com.message.inspector.message_inspector`. Both controllers are mapped under `/api`.
+Layered packages under `com.message.inspector.message_inspector`. Both controllers are
+mapped under `/api`.
+
+```
+config/       Application, Artemis, Redis, RestTemplate, Swagger wiring
+controller/   MessageController, QueueController
+dto/          ApiResponse, JmsMessageDto, JmsQueueDto, JolokiaReadResponse, JolokiaResponse
+integration/  artemis/  JmsMessageRepository, JmsQueueRepository   (JMS)
+              jolokia/  JolokiaRepository                          (HTTP/JMX)
+              cache/    RedisQueueRepository                       (Redis)
+security/     SecurityConfig
+service/      MessageService, QueueService, QueuePreferenceService
+```
+
+**Everything that talks to an external system lives under `integration/`.** There is no
+`repository/` package and no persistence layer — this app owns no data, it reads and
+mutates someone else's broker. `cache/` names the role rather than the technology because
+what it stores is UI state with a TTL.
+
+There is deliberately **no `domain/` or `mapper/` package yet.** Every type in `dto/` is a
+wire format; adding either would assert a layer that does not exist. They arrive with the
+first real domain model.
 
 Two independent broker access paths, and the distinction matters:
 
@@ -68,9 +104,18 @@ last-used-queue preference. It is a cache of UI state, not application data.
 
 ### Gotchas
 
-- **`JmsQueueRepository.fetchQueuesWithArtemis()` returns hardcoded placeholder queues**
-  (`test.queue.1..3`) — it opens a connection but never uses it. The `/api/queues/artemis-straight`
-  endpoint is therefore a stub; Jolokia is the working queue-discovery path.
+- **`/api/queues/artemis-straight` always returns `[]`.** Earlier notes here claimed it
+  returns hardcoded placeholders (`test.queue.1..3`); that is wrong. The method calls
+  `session.createBrowser(null)`, which throws `Cannot create a browser with a null queue`
+  *before* reaching the placeholder loop, and the broad catch swallows it into an empty
+  list. Verified against a live broker 2026-07-21. The placeholder code is unreachable.
+  Jolokia is the only working queue-discovery path. Note the mock-based tests cannot see
+  this — they stub the layer that fails.
+- **The Jolokia envelope leaks to the client.** `QueueController.fetchQueueNamesWithJolokia`
+  returns `JolokiaResponse` verbatim, so the browser receives Jolokia's
+  `request`/`value`/`timestamp`/`status` wrapper rather than a clean list. The Angular
+  client reads `.value`. Unwrapping it is a breaking API change and needs a coordinated
+  frontend edit — deliberately deferred, not an oversight.
 - **`ArtemisConfig` hardcodes the broker URL and credentials** and builds its own
   `ConnectionFactory`, so the `spring.artemis.*` properties (which do read from
   `ARTEMIS_USER`/`ARTEMIS_PASSWORD`) are effectively inert for the `JmsTemplate` path.
@@ -88,6 +133,18 @@ last-used-queue preference. It is a cache of UI state, not application data.
   `allowCredentials(true)` for `http://localhost:4200`).
 - `jolokiaRestTemplate` registers a Jackson converter for `text/plain` because Jolokia
   returns JSON under that content type.
+- **`resend` delivers to a malformed queue name.** `convertToDto` sets `queueName` from
+  `message.getJMSDestination().toString()`, which yields `ActiveMQQueue[DLQ]`, not `DLQ`.
+  `MessageService.resendMessage` feeds that back into `sendMessage`, so a resend creates
+  and lands in an address literally named `ActiveMQQueue[DLQ]`. The API still reports
+  `success=true`. Confirmed against a live broker 2026-07-21; unfixed, tracked in the
+  plan's known gaps.
+- **Unhandled exceptions reach the client as 403, not 500.** `/error` is not in
+  `SecurityConfig`'s permit list, so when a controller throws, the forward to `/error`
+  is rejected by security and the caller sees a permission error. Verified: an invalid
+  message ID throws `IllegalArgumentException` from the `SAFE_MESSAGE_ID` guard and the
+  response is 403. Do not read a 403 from this API as an auth problem without checking
+  the server log.
 
 ## Conventions
 

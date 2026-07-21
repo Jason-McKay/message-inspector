@@ -51,8 +51,12 @@ class QueueControllerTest {
   /**
    * ✅ GET /api/queues/artemis-straight returns the queue list.
    * <p>
-   * Note this endpoint is a stub in production -- JmsQueueRepository returns hardcoded
-   * placeholders -- but the route itself is real and the UI calls it.
+   * Note this endpoint is dead in production: JmsQueueRepository calls
+   * {@code session.createBrowser(null)}, which always throws, and the catch swallows it
+   * into an empty list -- so the hardcoded placeholder queues below the throw are never
+   * reached and the endpoint returns {@code []}. Verified against a live broker
+   * 2026-07-21. The route and its serialisation are still real, which is what this test
+   * covers; the service is mocked, so the live failure is invisible here.
    */
   @Test
   void testFetchQueuesWithArtemis() throws Exception {
