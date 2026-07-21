@@ -5,7 +5,7 @@ import static org.mockito.Mockito.*;
 
 import com.message.inspector.message_inspector.model.ApiResponse;
 import com.message.inspector.message_inspector.model.JmsMessageDto;
-import com.message.inspector.message_inspector.repository.JmsMessageRepository;
+import com.message.inspector.message_inspector.integration.artemis.JmsMessageRepository;
 import jakarta.jms.JMSException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

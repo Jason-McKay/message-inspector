@@ -1,4 +1,4 @@
-package com.message.inspector.message_inspector.repository;
+package com.message.inspector.message_inspector.integration.artemis;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;

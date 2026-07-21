@@ -1,4 +1,4 @@
-package com.message.inspector.message_inspector.repository;
+package com.message.inspector.message_inspector.integration.artemis;
 
 import com.message.inspector.message_inspector.model.JmsMessageDto;
 import jakarta.jms.*;

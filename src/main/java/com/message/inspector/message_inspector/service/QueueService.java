@@ -2,7 +2,7 @@ package com.message.inspector.message_inspector.service;
 
 import com.message.inspector.message_inspector.model.JmsQueueDto;
 import com.message.inspector.message_inspector.model.JolokiaResponse;
-import com.message.inspector.message_inspector.repository.JmsQueueRepository;
+import com.message.inspector.message_inspector.integration.artemis.JmsQueueRepository;
 import com.message.inspector.message_inspector.integration.jolokia.JolokiaRepository;
 import jakarta.jms.JMSException;
 import lombok.RequiredArgsConstructor;
