@@ -112,8 +112,38 @@ last-used-queue preference. It is a cache of UI state, not application data.
   `session.createBrowser(null)`, which throws `Cannot create a browser with a null queue`
   *before* reaching the placeholder loop, and the broad catch swallows it into an empty
   list. Verified against a live broker 2026-07-21. The placeholder code is unreachable.
-  Jolokia is the only working queue-discovery path. Note the mock-based tests cannot see
+  Note the mock-based tests cannot see
   this — they stub the layer that fails.
+- **`/api/queues/artemis-jolokia` always returns `[]` too.** *Two* of the three discovery
+  endpoints are dead; only `/api/queues/artemis-jolokia/names` works. (An earlier note here
+  said Jolokia was "the only working queue-discovery path" — too generous: it is the only
+  working *route*, not the only working Jolokia method.) Two stacked causes, verified live
+  2026-07-21:
+  1. `JolokiaRepository.fetchQueuesWithJolokia` builds `HttpHeaders` with
+     `Accept: application/json`, then passes `null` as the request entity — the header
+     never goes out. Jolokia answers `text/plain`, no converter binds that to
+     `JolokiaReadResponse`, and the broad `catch (Exception)` turns the failure into an
+     empty list and an HTTP 200.
+  2. Even with the header sent, `JolokiaReadResponse.value` is a
+     `Map<String, QueueDetails>` while the requested `/AddressNames` returns a **JSON array
+     of strings** — `fetchQueueNamesWithJolokia` hits the same URL and binds it correctly
+     as `List<String>`. The DTO wants a different MBean query.
+
+  `JolokiaRepositoryTest` cannot catch either: it stubs the RestTemplate with a populated
+  `Map`, a shape the live endpoint never returns, and asserts the URL that is wrong for
+  that DTO. The characterisation tests pin the mock, not the endpoint. `QueueControllerTest`
+  compounds it by describing this route as "the working queue-discovery route".
+- **`delete` and `move-to-dlq` report success for a message that does not exist.**
+  `deleteMessageById`/`moveToDeadLetterQueue` return `void`, so `MessageService` sets
+  `success=true` unless a `JMSException` escapes. The repository knows — it prints
+  "No matching message found for deletion" and discards it. Only `resendMessage` checks.
+  `MessageServiceIT` has `testResendMessage_Missing` but no delete/DLQ equivalent, so the
+  gap in coverage mirrors the gap in behaviour exactly.
+- **`DLQ_NAME = "DLQ_test"` is hardcoded** in `JmsMessageRepository`. "Move to DLQ" writes
+  to an app-invented address, not the broker's real `DLQ`. `MessageServiceIT` asserts
+  against the constant itself, so it passes whatever the constant says.
+- **Browsing a queue that does not exist auto-creates the address**, so typos permanently
+  pollute the queue list on the dev broker.
 - **The Jolokia envelope leaks to the client.** `QueueController.fetchQueueNamesWithJolokia`
   returns `JolokiaResponse` verbatim, so the browser receives Jolokia's
   `request`/`value`/`timestamp`/`status` wrapper rather than a clean list. The Angular
