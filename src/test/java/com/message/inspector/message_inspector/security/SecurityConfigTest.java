@@ -1,4 +1,4 @@
-package com.message.inspector.message_inspector.config;
+package com.message.inspector.message_inspector.security;
 
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;

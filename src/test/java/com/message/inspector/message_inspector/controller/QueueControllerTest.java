@@ -10,9 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.message.inspector.message_inspector.config.SecurityConfig;
 import com.message.inspector.message_inspector.model.JmsQueueDto;
 import com.message.inspector.message_inspector.model.JolokiaResponse;
+import com.message.inspector.message_inspector.security.SecurityConfig;
 import com.message.inspector.message_inspector.service.QueuePreferenceService;
 import com.message.inspector.message_inspector.service.QueueService;
 import java.util.List;

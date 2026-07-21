@@ -1,4 +1,4 @@
-package com.message.inspector.message_inspector.config;
+package com.message.inspector.message_inspector.security;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
