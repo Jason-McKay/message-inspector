@@ -1,4 +1,4 @@
-package com.message.inspector.message_inspector.repository;
+package com.message.inspector.message_inspector.integration.cache;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.redis.core.RedisTemplate;

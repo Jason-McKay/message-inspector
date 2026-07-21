@@ -1,6 +1,5 @@
-package com.message.inspector.message_inspector.service;
+package com.message.inspector.message_inspector.integration.cache;
 
-import com.message.inspector.message_inspector.repository.RedisQueueRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;

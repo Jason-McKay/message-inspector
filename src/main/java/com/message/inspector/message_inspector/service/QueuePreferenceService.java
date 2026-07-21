@@ -1,6 +1,6 @@
 package com.message.inspector.message_inspector.service;
 
-import com.message.inspector.message_inspector.repository.RedisQueueRepository;
+import com.message.inspector.message_inspector.integration.cache.RedisQueueRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
