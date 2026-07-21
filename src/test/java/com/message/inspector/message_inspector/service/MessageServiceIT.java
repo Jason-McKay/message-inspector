@@ -145,6 +145,52 @@ class MessageServiceIT {
   }
 
   /**
+   * ✅ A browsed message carries the queue's real name.
+   * <p>
+   * This is the regression test for the resend bug: {@code convertToDto} used to derive
+   * queueName from {@code destination.toString()}, which on Artemis is
+   * {@code ActiveMQQueue[testQueue]}. That wrong value was shown in the UI and, fatally,
+   * fed back into resend. Before the fix this assertion fails on the real broker while
+   * every mock-based test still passes, because the mocks supply a clean name the real
+   * code path never produced.
+   */
+  @Test
+  void testBrowsedMessageCarriesRealQueueName() throws JMSException {
+    JmsMessageDto message = messageService.getAllMessages(TEST_QUEUE).getFirst();
+
+    assertThat(message.getQueueName()).isEqualTo(TEST_QUEUE);
+  }
+
+  /**
+   * ✅ Resend puts a copy back on the queue it came from, and the copy is a real message
+   * on that queue rather than one delivered to an address named after a toString().
+   * Browse is non-destructive, so the original is still there and the count goes to two.
+   */
+  @Test
+  void testResendMessage() throws JMSException {
+    assertThat(messageService.resendMessage(TEST_QUEUE, messageId).isSuccess()).isTrue();
+
+    assertThat(messageService.getAllMessages(TEST_QUEUE))
+      .hasSize(2)
+      .allSatisfy(message -> {
+        assertThat(message.getPayload()).isEqualTo(PAYLOAD);
+        assertThat(message.getQueueName()).isEqualTo(TEST_QUEUE);
+      });
+  }
+
+  /**
+   * ✅ Resending an ID that does not exist reports failure rather than throwing, and
+   * sends nothing.
+   */
+  @Test
+  void testResendMessage_Missing() throws JMSException {
+    assertThat(messageService.resendMessage(TEST_QUEUE, "ID:does-not-exist").isSuccess())
+      .isFalse();
+
+    assertThat(messageService.getAllMessages(TEST_QUEUE)).hasSize(1);
+  }
+
+  /**
    * ❌ The selector-injection guard rejects a crafted ID against a live broker, and
    * consumes nothing. The mock tests assert the guard is invoked; this asserts the queue
    * is genuinely untouched.

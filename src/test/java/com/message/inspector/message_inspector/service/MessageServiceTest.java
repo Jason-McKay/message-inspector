@@ -105,11 +105,22 @@ class MessageServiceTest {
     verify(jmsMessageRepository, times(1)).sendMessage(QUEUE_NAME, mockMessage);
   }
 
+  /**
+   * ✅ Resending a message that does not exist reports failure instead of throwing.
+   * <p>
+   * This previously asserted a NullPointerException -- the old code dereferenced the
+   * null DTO to read its queue name. Now that resend uses the caller's queue name, that
+   * dereference is gone, so the null case is handled explicitly rather than crashing.
+   */
   @Test
   void testResendMessage_MessageNotFound() throws JMSException {
     when(jmsMessageRepository.getMessageById(QUEUE_NAME, "unknown")).thenReturn(null);
 
-    assertThrows(NullPointerException.class, () -> messageService.resendMessage(QUEUE_NAME, "unknown"));
+    ApiResponse response = messageService.resendMessage(QUEUE_NAME, "unknown");
+
+    assertFalse(response.isSuccess());
+    assertEquals("Message not found.", response.getMessage());
+    verify(jmsMessageRepository, never()).sendMessage(anyString(), any());
   }
 
   /**

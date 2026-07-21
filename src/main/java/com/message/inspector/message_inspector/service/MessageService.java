@@ -35,7 +35,16 @@ public class MessageService {
     ApiResponse apiResponse = new ApiResponse();
     try {
       JmsMessageDto message = jmsMessageRepository.getMessageById(queueName, messageId);
-      jmsMessageRepository.sendMessage(message.getQueueName(), message);
+      if (message == null) {
+        apiResponse.setSuccess(false);
+        apiResponse.setMessage("Message not found.");
+        return apiResponse;
+      }
+
+      // Resend to the queue the caller named, not the one round-tripped through the DTO.
+      // The DTO's queueName is derived from the message's destination, so trusting it
+      // made resend depend on that derivation being correct -- which it was not.
+      jmsMessageRepository.sendMessage(queueName, message);
 
       apiResponse.setSuccess(true);
       apiResponse.setMessage("Message resent successfully.");

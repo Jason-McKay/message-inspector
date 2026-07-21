@@ -137,12 +137,15 @@ last-used-queue preference. It is a cache of UI state, not application data.
   `allowCredentials(true)` for `http://localhost:4200`).
 - `jolokiaRestTemplate` registers a Jackson converter for `text/plain` because Jolokia
   returns JSON under that content type.
-- **`resend` delivers to a malformed queue name.** `convertToDto` sets `queueName` from
-  `message.getJMSDestination().toString()`, which yields `ActiveMQQueue[DLQ]`, not `DLQ`.
-  `MessageService.resendMessage` feeds that back into `sendMessage`, so a resend creates
-  and lands in an address literally named `ActiveMQQueue[DLQ]`. The API still reports
-  `success=true`. Confirmed against a live broker 2026-07-21; unfixed, tracked in the
-  plan's known gaps.
+- **Destination names must come from `getQueueName()`, not `toString()`.** On Artemis,
+  `destination.toString()` yields `ActiveMQQueue[DLQ]` rather than `DLQ`. `convertToDto`
+  used to do exactly that, which put the wrong name in front of the user *and* broke
+  resend, because `resendMessage` fed the value back into `sendMessage` and delivered to
+  an address literally named `ActiveMQQueue[DLQ]` while reporting success. Fixed
+  2026-07-21 via `destinationName(...)`; `resendMessage` also now uses the caller's queue
+  name rather than the one round-tripped through the DTO. `MessageServiceIT` pins both.
+  Note the mock-based tests could never catch this — they supply a clean queue name the
+  real code path did not produce.
 - **Error responses** (fixed 2026-07-21; `/error` used to be unpermitted, which turned
   *every* server error into a misleading 403). Current mapping, all verified against a
   live broker:

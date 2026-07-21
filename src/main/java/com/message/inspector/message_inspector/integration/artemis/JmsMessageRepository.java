@@ -157,12 +157,30 @@ public class JmsMessageRepository {
       return new JmsMessageDto(
         message.getJMSMessageID(),
         textMessage.getText(),
-        message.getJMSDestination().toString(),
+        destinationName(message.getJMSDestination()),
         String.valueOf(message.getJMSTimestamp()),
         extractHeaders(message)
       );
     }
     throw new IllegalArgumentException("Unsupported message type.");
+  }
+
+  /**
+   * The destination's actual name.
+   * <p>
+   * This used to be {@code destination.toString()}, which on Artemis yields
+   * {@code ActiveMQQueue[DLQ]} rather than {@code DLQ}. That string was handed to the UI
+   * and, worse, fed back into {@code sendMessage} on resend -- creating and delivering to
+   * an address literally named {@code ActiveMQQueue[DLQ]} while reporting success.
+   */
+  private String destinationName(Destination destination) throws JMSException {
+    if (destination instanceof Queue queue) {
+      return queue.getQueueName();
+    }
+    if (destination instanceof Topic topic) {
+      return topic.getTopicName();
+    }
+    return destination == null ? null : destination.toString();
   }
 
   /**
