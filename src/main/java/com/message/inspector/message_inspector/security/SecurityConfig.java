@@ -34,7 +34,13 @@ public class SecurityConfig {
         .requestMatchers(
             "/api/**",
             "/swagger-ui/**",
-            "/v3/api-docs/**")
+            "/v3/api-docs/**",
+            // /error must be permitted or the container's forward to it is itself
+            // rejected by this chain, and every unhandled server error reaches the
+            // client as 403 instead of its real status. That masking is especially
+            // dangerous once authentication exists in Phase 4, because a 403 then
+            // looks like a legitimate answer rather than a bug.
+            "/error")
           .permitAll()
         .anyRequest().authenticated()
       );

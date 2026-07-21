@@ -162,6 +162,31 @@
                 </configuration>
             </plugin>
 
+            <!-- Failsafe runs the *IT integration tests, which surefire's default includes
+                 skip. Without this, MessageServiceIT was dead code that compiled but never
+                 executed, and no automated test opened a JMS connection at all, so every
+                 broker-level defect had to be found by driving the app by hand.
+                 Bound to verify, so `mvn test` stays fast and unit-only:
+                   ./mvnw test     -> surefire only (unit)
+                   ./mvnw verify   -> surefire + failsafe (needs Docker for the broker) -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-failsafe-plugin</artifactId>
+                <version>3.2.5</version>
+                <configuration>
+                    <!-- Same Docker API pin as surefire, and for the same reason. -->
+                    <argLine>-Djdk.attach.allowAttachSelf -XX:+EnableDynamicAgentLoading -Dapi.version=1.44</argLine>
+                </configuration>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>integration-test</goal>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+
             <!-- OWASP Dependency Check. Needs an NVD API key; supplied as nvd.api.key
                  from the active 'nvd' profile in ~/.m2/settings.xml. Without it the NVD
                  feed download is rate-limited to the point of being unusable. -->

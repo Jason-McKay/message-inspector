@@ -21,7 +21,8 @@ Maven wrapper (`./mvnw` in Bash, `.\mvnw.cmd` in PowerShell):
 
 ```bash
 ./mvnw clean compile
-./mvnw test
+./mvnw test                                  # unit tests only (surefire)
+./mvnw verify                                # unit + *IT integration tests (failsafe)
 ./mvnw spring-boot:run                       # boots on :8080
 ./mvnw test -Dtest=JolokiaRepositoryTest     # single test class
 ./mvnw test -Dtest=JolokiaRepositoryTest#methodName
@@ -45,16 +46,18 @@ Swagger UI: `http://localhost:8080/api/swagger-ui.html`; OpenAPI JSON at `/api/a
   in `pom.xml` pins `-Dapi.version=1.44`; do not remove it. docker-java's default Docker
   API version (1.32) is below the 1.40 minimum enforced by Docker Engine 29+, which fails
   with the misleading "Could not find a valid Docker environment".
-- `MessageServiceIT` **never runs**. There is no failsafe plugin and surefire does not
-  match `*IT`, so the reported test count excludes it. It is a real `@SpringBootTest`
-  against a live broker with a pre-seeded `testQueue`, so it will not pass unattended.
-  (Passing an explicit `-Dtest=...` filter overrides surefire's includes and *will* drag
-  it into the run, where it fails without a broker. Not a regression.)
-- **No test opens a JMS connection**, so a green suite says nothing about broker
-  behaviour. `SecurityConfigTest` is the only test that exercises the real filter chain
-  and the live Jolokia path — which also means **it fails if the infra is down**, and
-  that reads as a test failure rather than a missing container. Bring `../infrastructure`
-  up before trusting a red run.
+- **`./mvnw test` does not run `MessageServiceIT`** — surefire's includes do not match
+  `*IT`. That is deliberate: `mvn test` stays fast and unit-only. **Use `./mvnw verify`**
+  to run it via failsafe. (Passing an explicit `-Dtest=...` filter to surefire also drags
+  it in, which is not what you want — it will run without failsafe's setup.)
+- `MessageServiceIT` is **self-contained**: it starts its own Artemis container
+  (`apache/activemq-artemis:2.31.2`, matching the dev stack), seeds its own message, and
+  drains both queues before each test. It needs Docker but not the shared infra, and it
+  does not touch the dev broker. It is the only automated test that opens a JMS
+  connection — everything else at the message level is Mockito-based.
+- `SecurityConfigTest` exercises the real filter chain *and* the live Jolokia path, so
+  **it fails if the shared infra is down**, which reads as a test failure rather than a
+  missing container. Bring `../infrastructure` up before trusting a red run.
 - **Verify JMS changes by hand.** Boot the app, produce with
   `MSYS_NO_PATHCONV=1 docker exec dev-artemis /opt/activemq-artemis/bin/artemis producer
   --url tcp://localhost:61616 --destination queue://DLQ --message-count 3 --user admin
@@ -116,12 +119,13 @@ last-used-queue preference. It is a cache of UI state, not application data.
   `request`/`value`/`timestamp`/`status` wrapper rather than a clean list. The Angular
   client reads `.value`. Unwrapping it is a breaking API change and needs a coordinated
   frontend edit — deliberately deferred, not an oversight.
-- **`ArtemisConfig` hardcodes the broker URL and credentials** and builds its own
-  `ConnectionFactory`, so the `spring.artemis.*` properties (which do read from
-  `ARTEMIS_USER`/`ARTEMIS_PASSWORD`) are effectively inert for the `JmsTemplate` path.
-  `spring.main.allow-bean-definition-overriding=true` is what lets this coexist with
-  Boot's autoconfiguration. Jolokia credentials (`JOLOKIA_USER`/`JOLOKIA_PASSWORD`) *are*
-  wired properly, via `RestTemplateConfig`.
+- **`ArtemisConfig` builds its own `ConnectionFactory`** rather than using Boot's, which
+  `spring.main.allow-bean-definition-overriding=true` is what permits. It now *reads*
+  `spring.artemis.broker-url`/`user`/`password` (defaults match the local stack), so
+  those properties are live — they used to be hardcoded and therefore inert, which is
+  why `MessageServiceIT` could only ever target `localhost:61616` and now can point at a
+  container. Jolokia credentials (`JOLOKIA_USER`/`JOLOKIA_PASSWORD`) are wired via
+  `RestTemplateConfig`.
 - **JMS selectors are built by string concatenation.** `JmsMessageRepository` guards every
   such path with `requireValidMessageId` against `SAFE_MESSAGE_ID`. Any new selector-taking
   method must call it too — without it, an ID like `x' OR '1'='1` widens the selector and
@@ -139,12 +143,20 @@ last-used-queue preference. It is a cache of UI state, not application data.
   and lands in an address literally named `ActiveMQQueue[DLQ]`. The API still reports
   `success=true`. Confirmed against a live broker 2026-07-21; unfixed, tracked in the
   plan's known gaps.
-- **Unhandled exceptions reach the client as 403, not 500.** `/error` is not in
-  `SecurityConfig`'s permit list, so when a controller throws, the forward to `/error`
-  is rejected by security and the caller sees a permission error. Verified: an invalid
-  message ID throws `IllegalArgumentException` from the `SAFE_MESSAGE_ID` guard and the
-  response is 403. Do not read a 403 from this API as an auth problem without checking
-  the server log.
+- **Error responses** (fixed 2026-07-21; `/error` used to be unpermitted, which turned
+  *every* server error into a misleading 403). Current mapping, all verified against a
+  live broker:
+  - `IllegalArgumentException` (the `SAFE_MESSAGE_ID` guard) → **400**, with a generic
+    message; the offending input is deliberately not echoed back.
+  - `jakarta.jms.JMSException` → **502**, on the grounds that the broker is an upstream
+    dependency. A browse against a stopped broker returns
+    `{"success":false,"message":"Broker unavailable: ..."}`.
+  - Anything else → **500** via `/error`. Note this includes **Jolokia** failures: the
+    repository wraps them in a bare `RuntimeException`, so a queue-discovery failure is
+    500 rather than 502 despite also being an upstream problem. Giving it a dedicated
+    exception type is a reasonable follow-up.
+  - `ApiExceptionHandler` reuses `ApiResponse` so failures match the shape the
+    destructive endpoints already return, rather than introducing a second error format.
 
 ## Conventions
 

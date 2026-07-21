@@ -1,20 +1,69 @@
 package com.message.inspector.message_inspector.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.message.inspector.message_inspector.dto.JmsMessageDto;
 import com.message.inspector.message_inspector.integration.artemis.JmsMessageRepository;
 import jakarta.jms.JMSException;
+import java.time.Duration;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.TestPropertySource;
-import java.util.List;
+import org.springframework.test.context.DynamicPropertyRegistry;
+import org.springframework.test.context.DynamicPropertySource;
+import org.testcontainers.containers.GenericContainer;
+import org.testcontainers.containers.wait.strategy.Wait;
+import org.testcontainers.junit.jupiter.Container;
+import org.testcontainers.junit.jupiter.Testcontainers;
 
+/**
+ * The only automated test in the project that opens a real JMS connection.
+ * <p>
+ * Everything else at the message level is Mockito-based, which means a fully green suite
+ * has historically said nothing about whether the client can actually talk to a broker.
+ * Three real defects during Phase 3 were found by driving the running app by hand for
+ * exactly this reason. This closes that gap for the core message operations.
+ * <p>
+ * <strong>This class only runs under {@code ./mvnw verify}</strong> (failsafe), not
+ * {@code ./mvnw test} (surefire), and needs Docker. Previously it ran under neither: it
+ * compiled but was never executed, and its setup assumed a broker someone had seeded by
+ * hand.
+ * <p>
+ * It is self-contained now -- it starts its own broker, seeds its own message, and drains
+ * both queues before each test so cases cannot leak into one another. Pointing Spring at
+ * the container is only possible because {@code ArtemisConfig} reads its broker URL from
+ * properties; it used to hardcode {@code localhost:61616}.
+ */
 @SpringBootTest
-@TestPropertySource(locations = "classpath:application-test.properties")
+@Testcontainers
 class MessageServiceIT {
+
+  private static final String TEST_QUEUE = "testQueue";
+  private static final String PAYLOAD = "Test Payload";
+
+  /**
+   * Pinned to the same image and version as the shared dev stack in ../infrastructure so
+   * the test exercises the client/broker pairing that is actually run locally.
+   */
+  @Container
+  static final GenericContainer<?> ARTEMIS =
+      new GenericContainer<>("apache/activemq-artemis:2.31.2")
+        .withExposedPorts(61616)
+        .withEnv("ARTEMIS_USER", "admin")
+        .withEnv("ARTEMIS_PASSWORD", "admin")
+        .withEnv("ANONYMOUS_LOGIN", "false")
+        .waitingFor(Wait.forListeningPort().withStartupTimeout(Duration.ofMinutes(2)));
+
+  @DynamicPropertySource
+  static void brokerProperties(DynamicPropertyRegistry registry) {
+    registry.add("spring.artemis.broker-url",
+        () -> "tcp://" + ARTEMIS.getHost() + ":" + ARTEMIS.getMappedPort(61616));
+    registry.add("spring.artemis.user", () -> "admin");
+    registry.add("spring.artemis.password", () -> "admin");
+  }
 
   @Autowired
   private JmsMessageRepository jmsMessageRepository;
@@ -22,49 +71,107 @@ class MessageServiceIT {
   @Autowired
   private MessageService messageService;
 
-  private static final String TEST_QUEUE = "testQueue";
   private String messageId;
 
   @BeforeEach
-  void setup() throws JMSException {
-    // Send a test message
-    //JmsMessageDto testMessage = new JmsMessageDto("123", "Test Payload", TEST_QUEUE);
+  void seedOneMessage() throws JMSException {
+    drain(TEST_QUEUE);
+    drain(JmsMessageRepository.DLQ_NAME);
 
-    // Send a message, creating the queue if it doesn't exist
-    //jmsRepository.sendMessage(TEST_QUEUE, testMessage);
+    jmsMessageRepository.sendMessage(TEST_QUEUE, new JmsMessageDto(null, PAYLOAD, TEST_QUEUE));
 
-    // Retrieve the message ID after sending
     List<JmsMessageDto> messages = messageService.getAllMessages(TEST_QUEUE);
-    assertThat(messages).isNotEmpty();
+    assertThat(messages).hasSize(1);
     messageId = messages.getFirst().getMessageId();
-
-    System.out.println("The message id : " + messageId);
   }
 
+  /**
+   * ✅ A browse returns the seeded message over a real connection.
+   */
   @Test
   void testGetAllMessages() throws JMSException {
     List<JmsMessageDto> messages = messageService.getAllMessages(TEST_QUEUE);
-    assertThat(messages).isNotEmpty();
+
+    assertThat(messages).hasSize(1);
+    assertThat(messages.getFirst().getPayload()).isEqualTo(PAYLOAD);
   }
 
+  /**
+   * ✅ Fetching by ID goes through a real JMS selector -- the string-concatenated path
+   * that the SAFE_MESSAGE_ID guard protects. Mock tests can prove the guard is called;
+   * only this can prove the selector the broker receives actually matches.
+   */
   @Test
   void testGetMessageById() throws JMSException {
     JmsMessageDto message = messageService.getMessageById(TEST_QUEUE, messageId);
+
     assertThat(message).isNotNull();
-    assertThat(message.getPayload()).isEqualTo("\"Test Payload\"");
+    assertThat(message.getMessageId()).isEqualTo(messageId);
+    assertThat(message.getPayload()).isEqualTo(PAYLOAD);
   }
 
+  /**
+   * ❌ An ID that does not exist yields null rather than an exception.
+   */
+  @Test
+  void testGetMessageById_Missing() throws JMSException {
+    assertThat(messageService.getMessageById(TEST_QUEUE, "ID:does-not-exist")).isNull();
+  }
+
+  /**
+   * ✅ Delete really consumes the message: it is gone from the broker afterwards, not
+   * merely reported as deleted.
+   */
   @Test
   void testDeleteMessage() throws JMSException {
-    messageService.deleteMessage(TEST_QUEUE, messageId);
-    JmsMessageDto deletedMessage = messageService.getMessageById(TEST_QUEUE, messageId);
-    assertThat(deletedMessage).isNull();
+    assertThat(messageService.deleteMessage(TEST_QUEUE, messageId).isSuccess()).isTrue();
+
+    assertThat(messageService.getMessageById(TEST_QUEUE, messageId)).isNull();
+    assertThat(messageService.getAllMessages(TEST_QUEUE)).isEmpty();
   }
 
+  /**
+   * ✅ Move-to-DLQ consumes from the source queue and produces to the DLQ. Asserting both
+   * halves matters -- a move that only deletes would look identical from the source side.
+   */
   @Test
   void testMoveMessageToDLQ() throws JMSException {
-    messageService.moveMessageToDLQ(TEST_QUEUE, messageId);
-    List<JmsMessageDto> dlqMessages = messageService.getAllMessages(JmsMessageRepository.DLQ_NAME);
-    assertThat(dlqMessages).isNotEmpty();
+    assertThat(messageService.moveMessageToDLQ(TEST_QUEUE, messageId).isSuccess()).isTrue();
+
+    assertThat(messageService.getAllMessages(TEST_QUEUE)).isEmpty();
+    assertThat(messageService.getAllMessages(JmsMessageRepository.DLQ_NAME))
+      .extracting(JmsMessageDto::getPayload)
+      .contains(PAYLOAD);
+  }
+
+  /**
+   * ❌ The selector-injection guard rejects a crafted ID against a live broker, and
+   * consumes nothing. The mock tests assert the guard is invoked; this asserts the queue
+   * is genuinely untouched.
+   */
+  @Test
+  void testSelectorInjectionIsRejectedAndConsumesNothing() throws JMSException {
+    assertThatThrownBy(() -> messageService.getMessageById(TEST_QUEUE, "x' OR '1'='1"))
+      .isInstanceOf(IllegalArgumentException.class);
+
+    assertThat(messageService.getAllMessages(TEST_QUEUE)).hasSize(1);
+  }
+
+  /**
+   * Removes every message from a queue using the application's own browse and delete
+   * paths, so draining cannot succeed by a route the production code does not have. The
+   * iteration cap stops a broken delete from spinning forever.
+   */
+  private void drain(String queueName) throws JMSException {
+    for (int i = 0; i < 50; i++) {
+      List<JmsMessageDto> messages = messageService.getAllMessages(queueName);
+      if (messages.isEmpty()) {
+        return;
+      }
+      for (JmsMessageDto message : messages) {
+        messageService.deleteMessage(queueName, message.getMessageId());
+      }
+    }
+    throw new IllegalStateException("could not drain " + queueName);
   }
 }

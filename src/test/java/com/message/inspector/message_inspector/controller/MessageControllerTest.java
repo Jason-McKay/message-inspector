@@ -1,8 +1,6 @@
 package com.message.inspector.message_inspector.controller;
 
 import static org.hamcrest.Matchers.hasSize;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -186,20 +184,40 @@ class MessageControllerTest {
   }
 
   /**
-   * ⚠️ The read paths declare {@code throws JMSException} and nothing handles it --
-   * there is no @ControllerAdvice. The exception escapes the dispatcher rather than
-   * being translated into a response. Pinned so that adding error handling later is a
-   * visible, deliberate change.
+   * ✅ A broker failure is now 502, not an escaping exception.
+   * <p>
+   * This test previously pinned the opposite -- that a JMSException escaped the
+   * dispatcher unhandled, which combined with {@code /error} not being permitted to
+   * produce a <strong>403</strong> at the client. {@link ApiExceptionHandler} and the
+   * {@code /error} permit changed that deliberately. 502 rather than 500 because the
+   * app is fine and its upstream dependency is not.
    */
   @Test
-  void testGetAllMessages_JMSExceptionIsNotHandled() throws Exception {
+  void testGetAllMessages_BrokerFailureIsBadGateway() throws Exception {
     when(messageService.getAllMessages(QUEUE_NAME)).thenThrow(new JMSException("broker down"));
 
-    Exception thrown = assertThrows(Exception.class,
-        () -> mockMvc.perform(get(BASE)));
+    mockMvc.perform(get(BASE))
+      .andExpect(status().isBadGateway())
+      .andExpect(jsonPath("$.success").value(false))
+      .andExpect(jsonPath("$.message").value("Broker unavailable: broker down"));
+  }
 
-    assertInstanceOf(JMSException.class, rootCause(thrown),
-        "expected the JMSException to escape unhandled");
+  /**
+   * ✅ A rejected message ID is 400, and the rejection reason is not echoed back.
+   * <p>
+   * The SAFE_MESSAGE_ID guard lives in JmsMessageRepository and throws
+   * IllegalArgumentException; here the mocked service stands in for it. Not echoing the
+   * offending input is deliberate -- the guard is a selector-injection control.
+   */
+  @Test
+  void testInvalidMessageIdIsBadRequest() throws Exception {
+    when(messageService.getMessageById(QUEUE_NAME, "bad-id"))
+      .thenThrow(new IllegalArgumentException("Invalid message ID: x' OR '1'='1"));
+
+    mockMvc.perform(get(BASE + "/message/bad-id"))
+      .andExpect(status().isBadRequest())
+      .andExpect(jsonPath("$.success").value(false))
+      .andExpect(jsonPath("$.message").value("Invalid request parameter."));
   }
 
   /**
@@ -234,13 +252,5 @@ class MessageControllerTest {
     response.setSuccess(success);
     response.setMessage(message);
     return response;
-  }
-
-  private Throwable rootCause(Throwable throwable) {
-    Throwable current = throwable;
-    while (current.getCause() != null) {
-      current = current.getCause();
-    }
-    return current;
   }
 }
