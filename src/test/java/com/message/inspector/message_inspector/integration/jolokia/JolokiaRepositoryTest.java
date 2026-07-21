@@ -1,4 +1,4 @@
-package com.message.inspector.message_inspector.repository;
+package com.message.inspector.message_inspector.integration.jolokia;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -31,8 +31,9 @@ import java.util.Map;
 /**
  * Characterisation tests for {@link JolokiaRepository}.
  *
- * <p>These pin down what the class does <em>today</em>, ahead of the planned move to an
- * {@code integration/jolokia} package. They deliberately document current behaviour rather
+ * <p>These pin down what the class does <em>today</em>. They were written ahead of the move
+ * to this {@code integration/jolokia} package and carried through it unchanged, which is
+ * what makes that move verifiable. They deliberately document current behaviour rather
  * than ideal behaviour — including the broad exception swallowing in
  * {@code fetchQueuesWithJolokia}, which turns any failure into an empty list.
  */

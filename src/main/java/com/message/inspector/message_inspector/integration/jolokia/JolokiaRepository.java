@@ -1,4 +1,4 @@
-package com.message.inspector.message_inspector.repository;
+package com.message.inspector.message_inspector.integration.jolokia;
 
 import com.message.inspector.message_inspector.model.JmsQueueDto;
 import com.message.inspector.message_inspector.model.JolokiaReadResponse;
