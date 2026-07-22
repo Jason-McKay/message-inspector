@@ -9,6 +9,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.security.Principal;
 import java.util.List;
 
 /**
@@ -50,20 +51,26 @@ public class QueueController {
   }
 
   /**
-   * Save the last used queue for a user.
+   * Save the last used queue for the authenticated user.
+   * <p>
+   * The user id is taken from the security principal, not the request, so a caller can
+   * only ever write their own preference. This replaces the old {@code {userId}} path
+   * variable that trusted the client to name itself (and hardcoded {@code 'jason'} in the
+   * UI).
    */
-  @PostMapping("/last-used/{userId}")
-  public ResponseEntity<Void> saveLastUsedQueue(@PathVariable String userId, @RequestBody String queueName) {
-    queuePreferenceService.saveLastUsedQueue(userId, queueName);
+  @PostMapping("/last-used")
+  public ResponseEntity<Void> saveLastUsedQueue(Principal principal, @RequestBody String queueName) {
+    queuePreferenceService.saveLastUsedQueue(principal.getName(), queueName);
     return ResponseEntity.ok().build();
   }
 
   /**
-   * Get the last used queue for a user.
+   * Get the last used queue for the authenticated user. Absence is a 200 with an empty
+   * body, not a 404 -- a user with no stored preference yet is the normal first run.
    */
-  @GetMapping("/last-used/{userId}")
-  public ResponseEntity<String> getLastUsedQueue(@PathVariable String userId) {
-    String queueName = queuePreferenceService.getLastUsedQueue(userId);
+  @GetMapping("/last-used")
+  public ResponseEntity<String> getLastUsedQueue(Principal principal) {
+    String queueName = queuePreferenceService.getLastUsedQueue(principal.getName());
     return ResponseEntity.ok(queueName);
   }
 }

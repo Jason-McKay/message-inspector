@@ -56,6 +56,14 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
+        <!-- JWT bearer auth. Brings spring-security-oauth2-jose (Nimbus), which supplies
+             both the resource-server JwtDecoder (validation) and the NimbusJwtEncoder we
+             sign tokens with, so no separate JWT library (jjwt) is needed. Parent-managed
+             version. -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+        </dependency>
 
         <!-- OpenAPI / Swagger UI -->
         <dependency>
@@ -83,6 +91,13 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- @WithMockUser / SecurityMockMvcRequestPostProcessors for the auth tests; not
+             pulled in by starter-test. -->
+        <dependency>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-test</artifactId>
             <scope>test</scope>
         </dependency>
         <!-- org.apache.artemis, not org.apache.activemq: Artemis became a top-level

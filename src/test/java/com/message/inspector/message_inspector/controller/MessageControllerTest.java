@@ -24,6 +24,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.test.context.support.WithAnonymousUser;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -37,11 +40,15 @@ import org.springframework.test.web.servlet.MockMvc;
  * client expects them, and that Spring can still build the context after files move.
  * <p>
  * {@link SecurityConfig} is imported deliberately rather than relying on the default
- * {@code @WebMvcTest} security chain, so the tests run against the real filter chain
- * (which currently permits {@code /api/**} unauthenticated and disables CSRF).
+ * {@code @WebMvcTest} security chain, so the tests run against the real filter chain: every
+ * endpoint now requires a bearer token, and delete / move-to-dlq additionally require the
+ * ADMIN role. The class-level {@code @WithMockUser(roles = "ADMIN")} authenticates the
+ * happy-path cases; the 401 and 403 cases override it. The {@code JwtDecoder} is mocked so
+ * the resource-server chain can build without real token validation.
  */
 @WebMvcTest(MessageController.class)
 @Import(SecurityConfig.class)
+@WithMockUser(username = "admin", roles = "ADMIN")
 class MessageControllerTest {
 
   public static final String QUEUE_NAME = "testQueue";
@@ -54,6 +61,9 @@ class MessageControllerTest {
 
   @MockitoBean
   private MessageService messageService;
+
+  @MockitoBean
+  private JwtDecoder jwtDecoder;
 
   /**
    * ✅ GET /api/messages/queue/{queueName} returns the message list as a JSON array.
@@ -245,6 +255,60 @@ class MessageControllerTest {
       .andExpect(status().isNotFound());
 
     verify(messageService, times(0)).getAllMessages(anyString());
+  }
+
+  /**
+   * ✅ Without a token the whole message API is closed — 401, before the controller runs.
+   * This is what closes the Phase 2 permit-all on {@code /api/**}.
+   */
+  @Test
+  @WithAnonymousUser
+  void testGetAllMessages_UnauthenticatedIsUnauthorized() throws Exception {
+    mockMvc.perform(get(BASE))
+      .andExpect(status().isUnauthorized());
+
+    verify(messageService, times(0)).getAllMessages(anyString());
+  }
+
+  /**
+   * ✅ A plain USER can read and resend but not delete — delete is 403 for them, and the
+   * service is never reached. Role gating is enforced by {@code @PreAuthorize}.
+   */
+  @Test
+  @WithMockUser(username = "jason", roles = "USER")
+  void testDeleteMessage_AsUserIsForbidden() throws Exception {
+    mockMvc.perform(delete(MESSAGE_BASE))
+      .andExpect(status().isForbidden());
+
+    verify(messageService, times(0)).deleteMessage(anyString(), anyString());
+  }
+
+  /**
+   * ✅ Move-to-DLQ is destructive too, so a USER is likewise forbidden.
+   */
+  @Test
+  @WithMockUser(username = "jason", roles = "USER")
+  void testMoveMessageToDLQ_AsUserIsForbidden() throws Exception {
+    mockMvc.perform(post(MESSAGE_BASE + "/move-to-dlq"))
+      .andExpect(status().isForbidden());
+
+    verify(messageService, times(0)).moveMessageToDLQ(anyString(), anyString());
+  }
+
+  /**
+   * ✅ A USER can still resend — it is not restricted to ADMIN.
+   */
+  @Test
+  @WithMockUser(username = "jason", roles = "USER")
+  void testResendMessage_AsUserIsAllowed() throws Exception {
+    when(messageService.resendMessage(QUEUE_NAME, MESSAGE_ID))
+      .thenReturn(apiResponse(true, "Message resent successfully."));
+
+    mockMvc.perform(post(MESSAGE_BASE + "/resend"))
+      .andExpect(status().isOk())
+      .andExpect(jsonPath("$.success").value(true));
+
+    verify(messageService, times(1)).resendMessage(QUEUE_NAME, MESSAGE_ID);
   }
 
   private ApiResponse apiResponse(boolean success, String message) {
