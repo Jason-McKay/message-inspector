@@ -103,10 +103,17 @@ class JmsMessageRepositoryTest {
 
   /**
    * ✅ Valid IDs still reach the broker on the destructive paths.
+   * <p>
+   * The stubbed return stands in for the callback's found/not-found boolean -- the mock
+   * never runs the SessionCallback, so the real found/not-found semantics are exercised in
+   * {@code MessageServiceIT}, not here. What this pins is that a valid ID is not rejected by
+   * the guard and does reach {@code execute}.
    */
   @Test
   void testDeleteMessageById_ValidIdReachesBroker() throws JMSException {
-    jmsMessageRepository.deleteMessageById(QUEUE_NAME, VALID_MESSAGE_ID);
+    doReturn(true).when(jmsTemplate).execute(ArgumentMatchers.<SessionCallback<Object>>any(), eq(true));
+
+    assertTrue(jmsMessageRepository.deleteMessageById(QUEUE_NAME, VALID_MESSAGE_ID));
 
     verify(jmsTemplate).execute(ArgumentMatchers.<SessionCallback<Object>>any(), eq(true));
   }

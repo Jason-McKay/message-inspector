@@ -62,9 +62,9 @@ public class MessageService {
   public ApiResponse deleteMessage(String queueName, String messageId) {
     ApiResponse apiResponse = new ApiResponse();
     try {
-      jmsMessageRepository.deleteMessageById(queueName, messageId);
-      apiResponse.setSuccess(true);
-      apiResponse.setMessage("Message deleted successfully.");
+      boolean deleted = jmsMessageRepository.deleteMessageById(queueName, messageId);
+      apiResponse.setSuccess(deleted);
+      apiResponse.setMessage(deleted ? "Message deleted successfully." : "Message not found.");
     } catch (JMSException e) {
       apiResponse.setSuccess(false);
       apiResponse.setMessage("Failed to delete message: " + e.getMessage());
@@ -79,9 +79,9 @@ public class MessageService {
   public ApiResponse moveMessageToDLQ(String queueName, String messageId) {
     ApiResponse apiResponse = new ApiResponse();
     try {
-      jmsMessageRepository.moveToDeadLetterQueue(queueName, messageId);
-      apiResponse.setSuccess(true);
-      apiResponse.setMessage("Message moved to DLQ successfully.");
+      boolean moved = jmsMessageRepository.moveToDeadLetterQueue(queueName, messageId);
+      apiResponse.setSuccess(moved);
+      apiResponse.setMessage(moved ? "Message moved to DLQ successfully." : "Message not found.");
     } catch (JMSException e) {
       apiResponse.setSuccess(false);
       apiResponse.setMessage("Failed to move message to DLQ: " + e.getMessage());

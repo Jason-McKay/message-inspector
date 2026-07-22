@@ -3,6 +3,7 @@ package com.message.inspector.message_inspector.integration.artemis;
 import com.message.inspector.message_inspector.dto.JmsMessageDto;
 import jakarta.jms.*;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jms.core.JmsTemplate;
 import org.springframework.jms.core.MessagePostProcessor;
 import org.springframework.stereotype.Repository;
@@ -18,7 +19,11 @@ public class JmsMessageRepository {
 
   private final JmsTemplate jmsTemplate;
 
-  public static final String DLQ_NAME = "DLQ_test"; // Dead Letter Queue name
+  // The Dead Letter Queue name. Defaults to the broker's real DLQ; used to be hardcoded
+  // "DLQ_test", so "Move to DLQ" wrote to an app-invented address instead of the broker's
+  // DLQ. Override with message-inspector.dlq-name where the DLQ is named differently.
+  @Value("${message-inspector.dlq-name:DLQ}")
+  private String dlqName;
 
   /**
    * Characters permitted in a JMS message ID. Deliberately narrow: Artemis IDs are
@@ -96,19 +101,24 @@ public class JmsMessageRepository {
 
   /**
    * Delete a message by ID (if applicable).
+   *
+   * @return {@code true} if a matching message was found and consumed, {@code false} if
+   *         no message matched. The caller needs this to tell a real delete from a no-op;
+   *         without it a delete that consumed nothing was reported to the user as success.
    */
-  public void deleteMessageById(String queueName, String messageId) throws JMSException {
+  public boolean deleteMessageById(String queueName, String messageId) throws JMSException {
     // JMS does not support direct message deletion, so this requires an alternative approach.
     // The below will consume the message selectively with a filter, ensuring it does not get reprocessed.
     requireValidMessageId(messageId);
 
-    jmsTemplate.execute(session -> {
+    return jmsTemplate.execute(session -> {
       Queue queue = session.createQueue(queueName);
       MessageConsumer consumer = session.createConsumer(queue, "JMSMessageID='" + messageId + "'");
 
       Message message = consumer.receive(5000); // 5-second timeout
 
-      if (message != null) {
+      boolean found = message != null;
+      if (found) {
         System.out.println("Deleting message: " + message.getJMSMessageID());
         message.acknowledge(); // Marks the message as consumed, preventing reprocessing
       } else {
@@ -116,26 +126,31 @@ public class JmsMessageRepository {
       }
 
       consumer.close();
-      return null;
+      return found;
     }, true);
   }
 
   /**
    * Moves a message to the Dead Letter Queue (DLQ) instead of deleting it permanently.
+   *
+   * @return {@code true} if a matching message was found and moved, {@code false} if no
+   *         message matched. Same reason as {@link #deleteMessageById}: a move that moved
+   *         nothing must not report success.
    */
-  public void moveToDeadLetterQueue(String queueName, String messageId) throws JMSException {
+  public boolean moveToDeadLetterQueue(String queueName, String messageId) throws JMSException {
     requireValidMessageId(messageId);
 
-    jmsTemplate.execute(session -> {
+    return jmsTemplate.execute(session -> {
       Queue queue = session.createQueue(queueName);
 
       MessageConsumer consumer = session.createConsumer(queue, "JMSMessageID='" + messageId + "'");
       Message message = consumer.receive(5000); // 5-second timeout
 
-      if (message != null) {
+      boolean found = message != null;
+      if (found) {
         // Convert to DTO and send to DLQ
         JmsMessageDto dto = convertToDto(message);
-        sendMessage(DLQ_NAME, dto);
+        sendMessage(dlqName, dto);
 
         // Acknowledge and commit transaction
         message.acknowledge();
@@ -144,7 +159,7 @@ public class JmsMessageRepository {
       }
 
       consumer.close();
-      return null;
+      return found;
     }, true);
   }
 
