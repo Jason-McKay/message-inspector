@@ -124,12 +124,30 @@ class MessageServiceTest {
   }
 
   /**
-   * ✅ Test deleting a message.
+   * ✅ Test deleting a message that exists.
    */
   @Test
   void testDeleteMessage() throws JMSException {
-    assertDoesNotThrow(() -> messageService.deleteMessage(QUEUE_NAME, MESSAGE_ID));
+    when(jmsMessageRepository.deleteMessageById(QUEUE_NAME, MESSAGE_ID)).thenReturn(true);
+
+    ApiResponse response = messageService.deleteMessage(QUEUE_NAME, MESSAGE_ID);
+
+    assertTrue(response.isSuccess());
     verify(jmsMessageRepository, times(1)).deleteMessageById(QUEUE_NAME, MESSAGE_ID);
+  }
+
+  /**
+   * ✅ Deleting a message that no longer exists reports failure instead of a false success.
+   * The repository returns false when nothing matched; the service must not claim success.
+   */
+  @Test
+  void testDeleteMessage_NotFound() throws JMSException {
+    when(jmsMessageRepository.deleteMessageById(QUEUE_NAME, "missing")).thenReturn(false);
+
+    ApiResponse response = messageService.deleteMessage(QUEUE_NAME, "missing");
+
+    assertFalse(response.isSuccess());
+    assertEquals("Message not found.", response.getMessage());
   }
 
   @Test
@@ -143,12 +161,29 @@ class MessageServiceTest {
   }
 
   /**
-   * ✅ Test moving a message to the DLQ.
+   * ✅ Test moving a message that exists to the DLQ.
    */
   @Test
   void testMoveMessageToDLQ() throws JMSException {
-    assertDoesNotThrow(() -> messageService.moveMessageToDLQ(QUEUE_NAME, MESSAGE_ID));
+    when(jmsMessageRepository.moveToDeadLetterQueue(QUEUE_NAME, MESSAGE_ID)).thenReturn(true);
+
+    ApiResponse response = messageService.moveMessageToDLQ(QUEUE_NAME, MESSAGE_ID);
+
+    assertTrue(response.isSuccess());
     verify(jmsMessageRepository, times(1)).moveToDeadLetterQueue(QUEUE_NAME, MESSAGE_ID);
+  }
+
+  /**
+   * ✅ Moving a message that no longer exists reports failure instead of a false success.
+   */
+  @Test
+  void testMoveMessageToDLQ_NotFound() throws JMSException {
+    when(jmsMessageRepository.moveToDeadLetterQueue(QUEUE_NAME, "missing")).thenReturn(false);
+
+    ApiResponse response = messageService.moveMessageToDLQ(QUEUE_NAME, "missing");
+
+    assertFalse(response.isSuccess());
+    assertEquals("Message not found.", response.getMessage());
   }
 
   @Test

@@ -3,6 +3,7 @@ package com.message.inspector.message_inspector.service;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.message.inspector.message_inspector.dto.ApiResponse;
 import com.message.inspector.message_inspector.dto.JmsMessageDto;
 import com.message.inspector.message_inspector.integration.artemis.JmsMessageRepository;
 import jakarta.jms.JMSException;
@@ -11,6 +12,7 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -71,12 +73,20 @@ class MessageServiceIT {
   @Autowired
   private MessageService messageService;
 
+  /**
+   * The configured DLQ name, resolved the same way the repository resolves it. Asserting
+   * against this rather than a hardcoded constant is what lets the move test catch the old
+   * "DLQ_test" bug -- the constant it used to assert against passed whatever it said.
+   */
+  @Value("${message-inspector.dlq-name:DLQ}")
+  private String dlqName;
+
   private String messageId;
 
   @BeforeEach
   void seedOneMessage() throws JMSException {
     drain(TEST_QUEUE);
-    drain(JmsMessageRepository.DLQ_NAME);
+    drain(dlqName);
 
     jmsMessageRepository.sendMessage(TEST_QUEUE, new JmsMessageDto(null, PAYLOAD, TEST_QUEUE));
 
@@ -139,9 +149,38 @@ class MessageServiceIT {
     assertThat(messageService.moveMessageToDLQ(TEST_QUEUE, messageId).isSuccess()).isTrue();
 
     assertThat(messageService.getAllMessages(TEST_QUEUE)).isEmpty();
-    assertThat(messageService.getAllMessages(JmsMessageRepository.DLQ_NAME))
+    assertThat(messageService.getAllMessages(dlqName))
       .extracting(JmsMessageDto::getPayload)
       .contains(PAYLOAD);
+  }
+
+  /**
+   * ❌ Deleting an ID that does not exist reports failure rather than success, and leaves
+   * the queue untouched. Before the fix the repository returned void and the service
+   * reported success for a delete that consumed nothing -- the "already consumed by
+   * someone else" race is the normal failure in a queue browser, so this mattered.
+   */
+  @Test
+  void testDeleteMessage_Missing() throws JMSException {
+    ApiResponse response = messageService.deleteMessage(TEST_QUEUE, "ID:does-not-exist");
+
+    assertThat(response.isSuccess()).isFalse();
+    assertThat(response.getMessage()).isEqualTo("Message not found.");
+    assertThat(messageService.getAllMessages(TEST_QUEUE)).hasSize(1);
+  }
+
+  /**
+   * ❌ Moving an ID that does not exist reports failure, moves nothing to the DLQ, and
+   * leaves the source queue untouched. Same false-success bug as delete.
+   */
+  @Test
+  void testMoveMessageToDLQ_Missing() throws JMSException {
+    ApiResponse response = messageService.moveMessageToDLQ(TEST_QUEUE, "ID:does-not-exist");
+
+    assertThat(response.isSuccess()).isFalse();
+    assertThat(response.getMessage()).isEqualTo("Message not found.");
+    assertThat(messageService.getAllMessages(TEST_QUEUE)).hasSize(1);
+    assertThat(messageService.getAllMessages(dlqName)).isEmpty();
   }
 
   /**

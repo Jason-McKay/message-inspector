@@ -6,6 +6,7 @@ import com.message.inspector.message_inspector.service.MessageService;
 import jakarta.jms.JMSException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -45,8 +46,9 @@ public class MessageController {
   }
 
   /**
-   * Delete a message permanently.
+   * Delete a message permanently. Destructive -- restricted to ADMIN.
    */
+  @PreAuthorize("hasRole('ADMIN')")
   @DeleteMapping("/queue/{queueName}/message/{messageId}")
   public ResponseEntity<ApiResponse> deleteMessage(@PathVariable String queueName,
                                                    @PathVariable String messageId) {
@@ -54,8 +56,9 @@ public class MessageController {
   }
 
   /**
-   * Move a message to the Dead Letter Queue (DLQ).
+   * Move a message to the Dead Letter Queue (DLQ). Destructive -- restricted to ADMIN.
    */
+  @PreAuthorize("hasRole('ADMIN')")
   @PostMapping("/queue/{queueName}/message/{messageId}/move-to-dlq")
   public ResponseEntity<ApiResponse> moveMessageToDLQ(@PathVariable String queueName,
                                                       @PathVariable String messageId) {

@@ -21,6 +21,9 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
+import org.springframework.security.test.context.support.WithAnonymousUser;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
@@ -30,10 +33,15 @@ import org.springframework.test.web.servlet.MockMvc;
  * <p>
  * Wiring safety net for the Phase 3 package refactor -- both collaborating services are
  * mocked, so this asserts routing and serialisation, not broker or Redis behaviour.
- * {@link SecurityConfig} is imported so the real filter chain applies.
+ * {@link SecurityConfig} is imported so the real filter chain applies: every route now
+ * requires a bearer token, so the class authenticates as a plain USER (which is all the
+ * queue endpoints need) and the {@code JwtDecoder} is mocked so the chain can build. The
+ * last-used routes now read the username from the principal, so {@code USER_ID} is also the
+ * mock user's name.
  */
 @WebMvcTest(QueueController.class)
 @Import(SecurityConfig.class)
+@WithMockUser(username = "jason", roles = "USER")
 class QueueControllerTest {
 
   public static final String USER_ID = "jason";
@@ -47,6 +55,9 @@ class QueueControllerTest {
 
   @MockitoBean
   private QueuePreferenceService queuePreferenceService;
+
+  @MockitoBean
+  private JwtDecoder jwtDecoder;
 
   /**
    * ✅ GET /api/queues/artemis-straight returns the queue list.
@@ -75,8 +86,13 @@ class QueueControllerTest {
   }
 
   /**
-   * ✅ GET /api/queues/artemis-jolokia returns the queue list from the Jolokia path --
-   * the working queue-discovery route.
+   * ✅ GET /api/queues/artemis-jolokia returns the queue list from the Jolokia path.
+   * <p>
+   * Like {@code artemis-straight}, this route is dead in production: it returns {@code []}
+   * because the Jolokia response comes back as {@code text/plain} and no converter binds it
+   * to {@code JolokiaReadResponse}, and the broad catch swallows the failure. Only
+   * {@code artemis-jolokia/names} actually works. The service is mocked here, so the route
+   * and its serialisation are what this covers -- the live failure is invisible.
    */
   @Test
   void testFetchQueuesWithJolokia() throws Exception {
@@ -132,12 +148,12 @@ class QueueControllerTest {
   }
 
   /**
-   * ✅ POST /api/queues/last-used/{userId} stores the raw request body and returns an
-   * empty 200.
+   * ✅ POST /api/queues/last-used stores the raw request body under the authenticated
+   * user's name (from the principal, not the URL) and returns an empty 200.
    */
   @Test
   void testSaveLastUsedQueue() throws Exception {
-    mockMvc.perform(post("/api/queues/last-used/" + USER_ID)
+    mockMvc.perform(post("/api/queues/last-used")
         .contentType(MediaType.TEXT_PLAIN)
         .content(QUEUE_NAME))
       .andExpect(status().isOk())
@@ -153,7 +169,7 @@ class QueueControllerTest {
    */
   @Test
   void testSaveLastUsedQueue_JsonBodyIsStoredVerbatimIncludingQuotes() throws Exception {
-    mockMvc.perform(post("/api/queues/last-used/" + USER_ID)
+    mockMvc.perform(post("/api/queues/last-used")
         .contentType(MediaType.APPLICATION_JSON)
         .content("\"" + QUEUE_NAME + "\""))
       .andExpect(status().isOk());
@@ -162,13 +178,13 @@ class QueueControllerTest {
   }
 
   /**
-   * ✅ GET /api/queues/last-used/{userId} returns the stored queue name.
+   * ✅ GET /api/queues/last-used returns the authenticated user's stored queue name.
    */
   @Test
   void testGetLastUsedQueue() throws Exception {
     when(queuePreferenceService.getLastUsedQueue(USER_ID)).thenReturn(QUEUE_NAME);
 
-    mockMvc.perform(get("/api/queues/last-used/" + USER_ID))
+    mockMvc.perform(get("/api/queues/last-used"))
       .andExpect(status().isOk())
       .andExpect(content().string(QUEUE_NAME));
 
@@ -181,10 +197,23 @@ class QueueControllerTest {
    */
   @Test
   void testGetLastUsedQueue_NoPreferenceReturnsOkWithEmptyBody() throws Exception {
-    when(queuePreferenceService.getLastUsedQueue("unknown-user")).thenReturn(null);
+    when(queuePreferenceService.getLastUsedQueue(USER_ID)).thenReturn(null);
 
-    mockMvc.perform(get("/api/queues/last-used/unknown-user"))
+    mockMvc.perform(get("/api/queues/last-used"))
       .andExpect(status().isOk())
       .andExpect(content().string(""));
+  }
+
+  /**
+   * ✅ Queue discovery is closed to anonymous callers now — 401 without a token, before
+   * the service is reached.
+   */
+  @Test
+  @WithAnonymousUser
+  void testDiscovery_UnauthenticatedIsUnauthorized() throws Exception {
+    mockMvc.perform(get("/api/queues/artemis-jolokia/names"))
+      .andExpect(status().isUnauthorized());
+
+    verify(queueService, times(0)).fetchQueueNamesWithJolokia();
   }
 }

@@ -4,6 +4,7 @@ import com.message.inspector.message_inspector.dto.ApiResponse;
 import jakarta.jms.JMSException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 
@@ -45,6 +46,17 @@ public class ApiExceptionHandler {
     System.out.println("Broker error: " + e.getMessage());
     return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
       .body(response("Broker unavailable: " + e.getMessage()));
+  }
+
+  /**
+   * Bad credentials at login. Thrown by the {@code AuthenticationManager} inside
+   * {@code AuthController} (not by the resource-server filter, which handles missing/invalid
+   * tokens itself), so it reaches this advice and must be answered 401 -- deliberately
+   * without saying which of username or password was wrong.
+   */
+  @ExceptionHandler(AuthenticationException.class)
+  public ResponseEntity<ApiResponse> handleAuthentication(AuthenticationException e) {
+    return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(response("Invalid username or password."));
   }
 
   private ApiResponse response(String message) {

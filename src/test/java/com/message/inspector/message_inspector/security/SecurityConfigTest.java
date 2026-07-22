@@ -1,6 +1,5 @@
 package com.message.inspector.message_inspector.security;
 
-import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -29,7 +28,11 @@ class SecurityConfigTest {
   private MockMvc mockMvc;
 
   /**
-   * ✅ Preflight from the Angular dev server is answered, with credentials allowed.
+   * ✅ Preflight from the Angular dev server is answered for the allowed origin.
+   * <p>
+   * Credentials mode is now off: bearer auth rides in the Authorization header, not a
+   * cookie, so {@code allowCredentials} was dropped to false and the
+   * {@code Access-Control-Allow-Credentials} header is no longer emitted.
    */
   @Test
   void testPreflightFromAllowedOriginSucceeds() throws Exception {
@@ -38,7 +41,7 @@ class SecurityConfigTest {
         .header("Access-Control-Request-Method", "GET"))
       .andExpect(status().isOk())
       .andExpect(header().string("Access-Control-Allow-Origin", ALLOWED_ORIGIN))
-      .andExpect(header().string("Access-Control-Allow-Credentials", "true"));
+      .andExpect(header().doesNotExist("Access-Control-Allow-Credentials"));
   }
 
   /**
@@ -67,19 +70,14 @@ class SecurityConfigTest {
   }
 
   /**
-   * ✅ The API is reachable unauthenticated. This pins the CURRENT deliberate state --
-   * auth arrives in Phase 4, at which point this expectation should change.
-   * <p>
-   * Asserts only that the request is not rejected by security; the endpoint itself may
-   * fail for want of a live broker, which is not what this test is about.
+   * ✅ The API now requires authentication: an unauthenticated request is rejected with
+   * 401 by the security chain, before the controller (and any broker call) is reached.
+   * This replaces the old "permitted without auth" characterisation — Phase 4 closed that
+   * gap. Because security rejects first, this is broker-independent.
    */
   @Test
-  void testApiIsCurrentlyPermittedWithoutAuthentication() throws Exception {
+  void testApiRequiresAuthentication() throws Exception {
     mockMvc.perform(get("/api/queues/artemis-jolokia/names"))
-      .andExpect(result -> {
-        int status = result.getResponse().getStatus();
-        assertNotEquals(401, status, "endpoint should not require authentication yet");
-        assertNotEquals(403, status, "endpoint should not be forbidden yet");
-      });
+      .andExpect(status().isUnauthorized());
   }
 }
