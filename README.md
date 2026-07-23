@@ -20,10 +20,10 @@ transports — a deliberate split ([ADR 0001](docs/adr/0001-two-broker-access-pa
 
 ```mermaid
 flowchart LR
-    subgraph browser [Browser]
+    subgraph browser ["Browser"]
         NG[Angular SPA<br/>:4200]
     end
-    subgraph api [Spring Boot API :8080]
+    subgraph api ["Spring Boot API :8080"]
         C[controller]
         S[service]
         IA[integration/artemis<br/>JMS]
@@ -31,7 +31,7 @@ flowchart LR
         IC[integration/cache<br/>Redis]
         C --> S --> IA & IJ & IC
     end
-    subgraph infra [External systems]
+    subgraph infra ["External systems"]
         AB[(Artemis broker)]
         RD[(Redis)]
     end
