@@ -60,10 +60,13 @@ Neither is a fallback for the other.
 - **Coupling to the broker name.** `JolokiaRepository` builds MBean URLs by
   string-formatting `jolokia.brokerName` into an ObjectName. A broker renamed in
   `broker.xml` breaks discovery with a 404 from Jolokia, not an obvious error.
-- **A leaked envelope.** `QueueController` currently returns Jolokia's raw
+- **A leaked envelope.** `QueueController` returned Jolokia's raw
   `request`/`value`/`timestamp`/`status` wrapper to the browser. That is an integration
-  detail reaching the client, and it is a known wart — see the plan's known gaps. It is a
-  consequence of this decision that was never cleaned up, not part of the decision itself.
+  detail reaching the client — a consequence of this decision that had not been cleaned up,
+  not part of the decision itself.
+  **Update (2026-07-23):** resolved in Phase 5 — `/artemis-jolokia/names` now returns a
+  bare JSON array; the envelope is unwrapped inside `integration/jolokia` and no longer
+  crosses the controller boundary.
 
 **Why it is still right:** the alternative is exposing and securing JMX/RMI purely to
 list queue names, for a tool whose whole job is broker introspection. The Jolokia bridge

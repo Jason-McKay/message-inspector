@@ -11,11 +11,12 @@ once it is accepted.
 |---|---|---|
 | [0001](0001-two-broker-access-paths.md) | Two broker access paths: JMS for messages, Jolokia for queue metadata | Accepted |
 | [0002](0002-dependency-version-overrides-expire.md) | Every dependency version override carries an expiry | Accepted |
+| [0003](0003-redis-over-localstorage-for-preferences.md) | Last-used-queue preference lives in Redis, keyed by user, not in the browser | Accepted |
+| [0004](0004-layered-package-structure.md) | Packages named by role: `integration/` for external systems, no speculative layers | Accepted |
+| [0005](0005-jwt-bearer-over-cookie-session.md) | Authentication is a stateless JWT bearer token, not a cookie session | Accepted |
+| [0006](0006-dependency-maintenance-workflow.md) | OWASP Dependency-Check is the dependency-maintenance gate | Accepted |
 
-Both were written retrospectively, on 2026-07-21, while the reasoning was still
-recoverable. That is worth stating plainly: they are reconstructions, and the "date
-decided" line in each says when the decision was actually taken.
-
-Decisions worth recording that are **not yet written up**: the layered package structure
-adopted in Phase 3 (why `integration/` rather than `repository/`), and Redis over
-`localStorage` for last-used-queue state.
+All were written retrospectively, while the reasoning was still recoverable: 0001–0002 on
+2026-07-21, and 0003–0006 during the Phase 6 documentation pass on 2026-07-23. That is
+worth stating plainly — they are reconstructions, and the "date decided" line in each says
+when the decision was actually taken.
