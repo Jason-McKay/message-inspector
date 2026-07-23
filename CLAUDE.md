@@ -39,6 +39,9 @@ That brings up Artemis 2.31.2 (:61616 JMS, :8161 console/Jolokia), Redis (:6379)
 MySQL (unused by this app). Credentials are `admin`/`admin` throughout local dev.
 
 Swagger UI: `http://localhost:8080/api/swagger-ui.html`; OpenAPI JSON at `/api/api-docs`.
+**Dev-profile only** (and dev is the default profile): the base config sets
+`springdoc.*.enabled=false`, so any run with `SPRING_PROFILES_ACTIVE` set to something
+other than `dev` serves 404 on both routes. `SpringdocExposureTest` pins this.
 
 ### Testing notes
 
@@ -144,11 +147,11 @@ last-used-queue preference. It is a cache of UI state, not application data.
   against the constant itself, so it passes whatever the constant says.
 - **Browsing a queue that does not exist auto-creates the address**, so typos permanently
   pollute the queue list on the dev broker.
-- **The Jolokia envelope leaks to the client.** `QueueController.fetchQueueNamesWithJolokia`
-  returns `JolokiaResponse` verbatim, so the browser receives Jolokia's
-  `request`/`value`/`timestamp`/`status` wrapper rather than a clean list. The Angular
-  client reads `.value`. Unwrapping it is a breaking API change and needs a coordinated
-  frontend edit — deliberately deferred, not an oversight.
+- ~~**The Jolokia envelope leaks to the client.**~~ **FIXED 2026-07-23**:
+  `/artemis-jolokia/names` returns a bare JSON array; the JMX envelope is unwrapped in
+  `JolokiaRepository` (where `JolokiaResponse` remains the deserialization target — it
+  just never crosses the repository boundary any more). Coordinated with the frontend,
+  whose `QueueService` was made tolerant of both shapes first.
 - **`ArtemisConfig` builds its own `ConnectionFactory`** rather than using Boot's, which
   `spring.main.allow-bean-definition-overriding=true` is what permits. It now *reads*
   `spring.artemis.broker-url`/`user`/`password` (defaults match the local stack), so
@@ -184,10 +187,10 @@ last-used-queue preference. It is a cache of UI state, not application data.
   - `jakarta.jms.JMSException` → **502**, on the grounds that the broker is an upstream
     dependency. A browse against a stopped broker returns
     `{"success":false,"message":"Broker unavailable: ..."}`.
-  - Anything else → **500** via `/error`. Note this includes **Jolokia** failures: the
-    repository wraps them in a bare `RuntimeException`, so a queue-discovery failure is
-    500 rather than 502 despite also being an upstream problem. Giving it a dedicated
-    exception type is a reasonable follow-up.
+  - `JolokiaAccessException` → **502**, same upstream-dependency reasoning:
+    `fetchQueueNamesWithJolokia` wraps its failures in this type (fixed 2026-07-23;
+    they used to be bare `RuntimeException`s that fell through to 500).
+  - Anything else → **500** via `/error`.
   - `ApiExceptionHandler` reuses `ApiResponse` so failures match the shape the
     destructive endpoints already return, rather than introducing a second error format.
 

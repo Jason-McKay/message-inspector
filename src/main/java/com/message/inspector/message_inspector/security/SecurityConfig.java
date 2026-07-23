@@ -51,8 +51,10 @@ public class SecurityConfig {
             // by this chain, turning every unhandled server error into a 403. That masking
             // is especially dangerous now that 403 is a legitimate answer.
             "/error",
-            // Dev-facing API docs. Whether to expose these outside dev is the springdoc
-            // decision noted in the plan (springdoc.*.enabled per profile).
+            // Dev-facing API docs. springdoc is disabled outside the dev profile
+            // (springdoc.*.enabled, see application.properties), so these matchers point
+            // at routes that 404 in prod -- permitting a nonexistent route is harmless,
+            // and profile-conditional filter chains would be disproportionate machinery.
             "/api/swagger-ui.html",
             "/api/swagger-ui/**",
             "/api/api-docs/**",

@@ -128,7 +128,7 @@ class JolokiaRepositoryTest {
   // ---------------------------------------------------------------------
 
   @Test
-  @DisplayName("fetchQueueNamesWithJolokia returns the response when it carries a value")
+  @DisplayName("fetchQueueNamesWithJolokia unwraps the envelope and returns the names")
   void fetchQueueNamesWithJolokia_returnsResponse() {
     JolokiaResponse<List<String>> body = new JolokiaResponse<>();
     body.setValue(List.of("DLQ", "ExpiryQueue"));
@@ -138,14 +138,16 @@ class JolokiaRepositoryTest {
       any(String.class), eq(HttpMethod.GET), eq(null), any(ParameterizedTypeReference.class)))
       .thenReturn(ResponseEntity.ok(body));
 
-    JolokiaResponse<List<String>> response = jolokiaRepository.fetchQueueNamesWithJolokia();
-
-    assertThat(response.getValue()).containsExactly("DLQ", "ExpiryQueue");
-    assertThat(response.getStatus()).isEqualTo(200);
+    // The JMX envelope stays inside the repository: callers get the plain list.
+    assertThat(jolokiaRepository.fetchQueueNamesWithJolokia())
+      .containsExactly("DLQ", "ExpiryQueue");
   }
 
+  // The exception type matters, not just the message: ApiExceptionHandler maps
+  // JolokiaAccessException to 502, so a bare RuntimeException here would surface as 500.
+
   @Test
-  @DisplayName("fetchQueueNamesWithJolokia wraps a missing value section in a RuntimeException")
+  @DisplayName("fetchQueueNamesWithJolokia wraps a missing value section in a JolokiaAccessException")
   void fetchQueueNamesWithJolokia_missingValue_throws() {
     JolokiaResponse<List<String>> body = new JolokiaResponse<>();
     body.setValue(null);
@@ -155,12 +157,12 @@ class JolokiaRepositoryTest {
       .thenReturn(ResponseEntity.ok(body));
 
     assertThatThrownBy(() -> jolokiaRepository.fetchQueueNamesWithJolokia())
-      .isInstanceOf(RuntimeException.class)
+      .isInstanceOf(JolokiaAccessException.class)
       .hasMessageContaining("Response is null or missing value section");
   }
 
   @Test
-  @DisplayName("fetchQueueNamesWithJolokia wraps HTTP errors in a RuntimeException")
+  @DisplayName("fetchQueueNamesWithJolokia wraps HTTP errors in a JolokiaAccessException")
   void fetchQueueNamesWithJolokia_httpError_throws() {
     when(jolokiaRestTemplate.exchange(
       any(String.class), eq(HttpMethod.GET), eq(null), any(ParameterizedTypeReference.class)))
@@ -168,19 +170,19 @@ class JolokiaRepositoryTest {
         HttpStatus.NOT_FOUND, "Not Found", null, null, null));
 
     assertThatThrownBy(() -> jolokiaRepository.fetchQueueNamesWithJolokia())
-      .isInstanceOf(RuntimeException.class)
+      .isInstanceOf(JolokiaAccessException.class)
       .hasMessageContaining("Failed to fetch queue details");
   }
 
   @Test
-  @DisplayName("fetchQueueNamesWithJolokia wraps transport failures in a RuntimeException")
+  @DisplayName("fetchQueueNamesWithJolokia wraps transport failures in a JolokiaAccessException")
   void fetchQueueNamesWithJolokia_transportFailure_throws() {
     when(jolokiaRestTemplate.exchange(
       any(String.class), eq(HttpMethod.GET), eq(null), any(ParameterizedTypeReference.class)))
       .thenThrow(new ResourceAccessException("broker unreachable"));
 
     assertThatThrownBy(() -> jolokiaRepository.fetchQueueNamesWithJolokia())
-      .isInstanceOf(RuntimeException.class)
+      .isInstanceOf(JolokiaAccessException.class)
       .hasMessageContaining("Failed to fetch queue details");
   }
 

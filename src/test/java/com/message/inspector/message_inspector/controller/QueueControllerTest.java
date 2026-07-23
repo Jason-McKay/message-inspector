@@ -11,7 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.message.inspector.message_inspector.dto.JmsQueueDto;
-import com.message.inspector.message_inspector.dto.JolokiaResponse;
+import com.message.inspector.message_inspector.integration.jolokia.JolokiaAccessException;
 import com.message.inspector.message_inspector.security.SecurityConfig;
 import com.message.inspector.message_inspector.service.QueuePreferenceService;
 import com.message.inspector.message_inspector.service.QueueService;
@@ -110,25 +110,38 @@ class QueueControllerTest {
   }
 
   /**
-   * ✅ GET /api/queues/artemis-jolokia/names passes the Jolokia envelope through intact,
-   * including the nested status/value fields the UI reads.
+   * ✅ GET /api/queues/artemis-jolokia/names returns a bare JSON array of names. The
+   * Jolokia JMX envelope ({@code {request, value, timestamp, status}}) used to pass
+   * through intact and is now unwrapped in the repository -- clients never see it.
    */
   @Test
   void testFetchQueueNamesWithJolokia() throws Exception {
-    JolokiaResponse<List<String>> response = new JolokiaResponse<>();
-    response.setStatus(200);
-    response.setTimestamp(1_753_000_000L);
-    response.setValue(List.of("DLQ", "ExpiryQueue", QUEUE_NAME));
-    when(queueService.fetchQueueNamesWithJolokia()).thenReturn(response);
+    when(queueService.fetchQueueNamesWithJolokia())
+      .thenReturn(List.of("DLQ", "ExpiryQueue", QUEUE_NAME));
 
     mockMvc.perform(get("/api/queues/artemis-jolokia/names"))
       .andExpect(status().isOk())
-      .andExpect(jsonPath("$.status").value(200))
-      .andExpect(jsonPath("$.timestamp").value(1_753_000_000L))
-      .andExpect(jsonPath("$.value", hasSize(3)))
-      .andExpect(jsonPath("$.value[0]").value("DLQ"));
+      .andExpect(jsonPath("$", hasSize(3)))
+      .andExpect(jsonPath("$[0]").value("DLQ"));
 
     verify(queueService, times(1)).fetchQueueNamesWithJolokia();
+  }
+
+  /**
+   * ✅ A Jolokia failure surfaces as 502 with the shared failure body -- an upstream
+   * fault, not a 500. {@code JolokiaAccessException} propagates through the pass-through
+   * service into {@code ApiExceptionHandler}, mirroring the JMSException mapping.
+   */
+  @Test
+  void testFetchQueueNamesWithJolokia_JolokiaFailureIs502() throws Exception {
+    when(queueService.fetchQueueNamesWithJolokia())
+      .thenThrow(new JolokiaAccessException("Failed to fetch queue details: connection refused"));
+
+    mockMvc.perform(get("/api/queues/artemis-jolokia/names"))
+      .andExpect(status().isBadGateway())
+      .andExpect(jsonPath("$.success").value(false))
+      .andExpect(jsonPath("$.message")
+        .value("Broker unavailable: Failed to fetch queue details: connection refused"));
   }
 
   /**

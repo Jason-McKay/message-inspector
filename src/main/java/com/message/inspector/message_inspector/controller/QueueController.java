@@ -1,7 +1,6 @@
 package com.message.inspector.message_inspector.controller;
 
 import com.message.inspector.message_inspector.dto.JmsQueueDto;
-import com.message.inspector.message_inspector.dto.JolokiaResponse;
 import com.message.inspector.message_inspector.service.QueuePreferenceService;
 import com.message.inspector.message_inspector.service.QueueService;
 import jakarta.jms.JMSException;
@@ -42,11 +41,12 @@ public class QueueController {
   }
 
   /**
-   * Fetch all queue names from Artemis using Jolokia.
+   * Fetch all queue names from Artemis using Jolokia. Returns a bare JSON array: the
+   * Jolokia JMX envelope is unwrapped in the repository and no longer leaks to clients.
    */
   @GetMapping("/artemis-jolokia/names")
-  public ResponseEntity<JolokiaResponse<List<String>>> fetchQueueNamesWithJolokia() throws JMSException {
-    JolokiaResponse<List<String>> queues = queueService.fetchQueueNamesWithJolokia();
+  public ResponseEntity<List<String>> fetchQueueNamesWithJolokia() throws JMSException {
+    List<String> queues = queueService.fetchQueueNamesWithJolokia();
     return ResponseEntity.ok(queues);
   }
 
