@@ -39,6 +39,9 @@ That brings up Artemis 2.31.2 (:61616 JMS, :8161 console/Jolokia), Redis (:6379)
 MySQL (unused by this app). Credentials are `admin`/`admin` throughout local dev.
 
 Swagger UI: `http://localhost:8080/api/swagger-ui.html`; OpenAPI JSON at `/api/api-docs`.
+**Dev-profile only** (and dev is the default profile): the base config sets
+`springdoc.*.enabled=false`, so any run with `SPRING_PROFILES_ACTIVE` set to something
+other than `dev` serves 404 on both routes. `SpringdocExposureTest` pins this.
 
 ### Testing notes
 
