@@ -1,6 +1,7 @@
 package com.message.inspector.message_inspector.controller;
 
 import com.message.inspector.message_inspector.dto.ApiResponse;
+import com.message.inspector.message_inspector.integration.jolokia.JolokiaAccessException;
 import jakarta.jms.JMSException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -44,6 +45,18 @@ public class ApiExceptionHandler {
   @ExceptionHandler(JMSException.class)
   public ResponseEntity<ApiResponse> handleJms(JMSException e) {
     System.out.println("Broker error: " + e.getMessage());
+    return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
+      .body(response("Broker unavailable: " + e.getMessage()));
+  }
+
+  /**
+   * Jolokia is the broker's management face, so failing to reach or parse it is the same
+   * class of fault as a JMS failure: an upstream problem, 502. Previously these arrived
+   * as bare {@code RuntimeException}s and fell through to the container's 500.
+   */
+  @ExceptionHandler(JolokiaAccessException.class)
+  public ResponseEntity<ApiResponse> handleJolokia(JolokiaAccessException e) {
+    System.out.println("Jolokia error: " + e.getMessage());
     return ResponseEntity.status(HttpStatus.BAD_GATEWAY)
       .body(response("Broker unavailable: " + e.getMessage()));
   }

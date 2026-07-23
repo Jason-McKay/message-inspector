@@ -80,20 +80,23 @@ public class JolokiaRepository {
       if (response != null && response.getValue() != null) {
         return response;
       } else {
-        throw new RuntimeException("Response is null or missing value section");
+        throw new JolokiaAccessException("Response is null or missing value section");
       }
     } catch (HttpStatusCodeException e) {
       // Handle HTTP errors (e.g., 404, 500)
       System.err.println("HTTP Error: " + e.getStatusCode() + " - " + e.getResponseBodyAsString());
-      throw new RuntimeException("Failed to fetch queue details: " + e.getMessage(), e);
+      throw new JolokiaAccessException("Failed to fetch queue details: " + e.getMessage(), e);
     } catch (RestClientException e) {
       // Handle other client errors
       System.err.println("Client Error: " + e.getMessage());
-      throw new RuntimeException("Failed to fetch queue details: " + e.getMessage(), e);
+      throw new JolokiaAccessException("Failed to fetch queue details: " + e.getMessage(), e);
+    } catch (JolokiaAccessException e) {
+      // Already ours (the null-body case above) -- rethrow rather than double-wrap.
+      throw e;
     } catch (Exception e) {
       // Handle unexpected errors
       System.err.println("Unexpected Error: " + e.getMessage());
-      throw new RuntimeException("An unexpected error occurred: " + e.getMessage(), e);
+      throw new JolokiaAccessException("An unexpected error occurred: " + e.getMessage(), e);
     }
   }
 

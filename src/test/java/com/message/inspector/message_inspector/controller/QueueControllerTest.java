@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.message.inspector.message_inspector.dto.JmsQueueDto;
 import com.message.inspector.message_inspector.dto.JolokiaResponse;
+import com.message.inspector.message_inspector.integration.jolokia.JolokiaAccessException;
 import com.message.inspector.message_inspector.security.SecurityConfig;
 import com.message.inspector.message_inspector.service.QueuePreferenceService;
 import com.message.inspector.message_inspector.service.QueueService;
@@ -129,6 +130,23 @@ class QueueControllerTest {
       .andExpect(jsonPath("$.value[0]").value("DLQ"));
 
     verify(queueService, times(1)).fetchQueueNamesWithJolokia();
+  }
+
+  /**
+   * ✅ A Jolokia failure surfaces as 502 with the shared failure body -- an upstream
+   * fault, not a 500. {@code JolokiaAccessException} propagates through the pass-through
+   * service into {@code ApiExceptionHandler}, mirroring the JMSException mapping.
+   */
+  @Test
+  void testFetchQueueNamesWithJolokia_JolokiaFailureIs502() throws Exception {
+    when(queueService.fetchQueueNamesWithJolokia())
+      .thenThrow(new JolokiaAccessException("Failed to fetch queue details: connection refused"));
+
+    mockMvc.perform(get("/api/queues/artemis-jolokia/names"))
+      .andExpect(status().isBadGateway())
+      .andExpect(jsonPath("$.success").value(false))
+      .andExpect(jsonPath("$.message")
+        .value("Broker unavailable: Failed to fetch queue details: connection refused"));
   }
 
   /**
