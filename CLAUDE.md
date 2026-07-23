@@ -144,11 +144,11 @@ last-used-queue preference. It is a cache of UI state, not application data.
   against the constant itself, so it passes whatever the constant says.
 - **Browsing a queue that does not exist auto-creates the address**, so typos permanently
   pollute the queue list on the dev broker.
-- **The Jolokia envelope leaks to the client.** `QueueController.fetchQueueNamesWithJolokia`
-  returns `JolokiaResponse` verbatim, so the browser receives Jolokia's
-  `request`/`value`/`timestamp`/`status` wrapper rather than a clean list. The Angular
-  client reads `.value`. Unwrapping it is a breaking API change and needs a coordinated
-  frontend edit — deliberately deferred, not an oversight.
+- ~~**The Jolokia envelope leaks to the client.**~~ **FIXED 2026-07-23**:
+  `/artemis-jolokia/names` returns a bare JSON array; the JMX envelope is unwrapped in
+  `JolokiaRepository` (where `JolokiaResponse` remains the deserialization target — it
+  just never crosses the repository boundary any more). Coordinated with the frontend,
+  whose `QueueService` was made tolerant of both shapes first.
 - **`ArtemisConfig` builds its own `ConnectionFactory`** rather than using Boot's, which
   `spring.main.allow-bean-definition-overriding=true` is what permits. It now *reads*
   `spring.artemis.broker-url`/`user`/`password` (defaults match the local stack), so

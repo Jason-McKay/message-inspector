@@ -1,7 +1,6 @@
 package com.message.inspector.message_inspector.service;
 
 import com.message.inspector.message_inspector.dto.JmsQueueDto;
-import com.message.inspector.message_inspector.dto.JolokiaResponse;
 import com.message.inspector.message_inspector.integration.artemis.JmsQueueRepository;
 import com.message.inspector.message_inspector.integration.jolokia.JolokiaRepository;
 import jakarta.jms.JMSException;
@@ -32,9 +31,10 @@ public class QueueService {
   }
 
   /**
-   * Fetch all queue details with Jolokia.
+   * Fetch all queue names with Jolokia. Plain names -- the repository unwraps the JMX
+   * envelope, so it never crosses this boundary.
    */
-  public JolokiaResponse<List<String>> fetchQueueNamesWithJolokia() throws JMSException {
+  public List<String> fetchQueueNamesWithJolokia() throws JMSException {
     return jolokiaRepository.fetchQueueNamesWithJolokia();
   }
 }

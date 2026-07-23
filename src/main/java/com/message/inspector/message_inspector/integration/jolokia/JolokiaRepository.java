@@ -60,7 +60,13 @@ public class JolokiaRepository {
     return queueList;
   }
 
-  public JolokiaResponse<List<String>> fetchQueueNamesWithJolokia() {
+  /**
+   * Returns the queue names unwrapped. The Jolokia JMX envelope
+   * ({@code {request, value, timestamp, status}}) is still what arrives on the wire --
+   * {@code JolokiaResponse} remains the deserialization target -- but it stops here:
+   * callers, and therefore the HTTP API, see a plain list.
+   */
+  public List<String> fetchQueueNamesWithJolokia() {
 //    String url = String.format("%s/read/org.apache.activemq.artemis:broker=\"%s\",component=addresses,address=\"%s\"",
 //      jolokiaUrl, brokerName, queueName);
     String url = String.format("%s/read/org.apache.activemq.artemis:broker=\"%s\"/AddressNames",
@@ -78,7 +84,7 @@ public class JolokiaRepository {
       JolokiaResponse<List<String>> response = responseEntity.getBody();
 
       if (response != null && response.getValue() != null) {
-        return response;
+        return response.getValue();
       } else {
         throw new JolokiaAccessException("Response is null or missing value section");
       }

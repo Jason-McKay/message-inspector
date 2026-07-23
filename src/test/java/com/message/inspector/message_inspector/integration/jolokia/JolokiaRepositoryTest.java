@@ -128,7 +128,7 @@ class JolokiaRepositoryTest {
   // ---------------------------------------------------------------------
 
   @Test
-  @DisplayName("fetchQueueNamesWithJolokia returns the response when it carries a value")
+  @DisplayName("fetchQueueNamesWithJolokia unwraps the envelope and returns the names")
   void fetchQueueNamesWithJolokia_returnsResponse() {
     JolokiaResponse<List<String>> body = new JolokiaResponse<>();
     body.setValue(List.of("DLQ", "ExpiryQueue"));
@@ -138,10 +138,9 @@ class JolokiaRepositoryTest {
       any(String.class), eq(HttpMethod.GET), eq(null), any(ParameterizedTypeReference.class)))
       .thenReturn(ResponseEntity.ok(body));
 
-    JolokiaResponse<List<String>> response = jolokiaRepository.fetchQueueNamesWithJolokia();
-
-    assertThat(response.getValue()).containsExactly("DLQ", "ExpiryQueue");
-    assertThat(response.getStatus()).isEqualTo(200);
+    // The JMX envelope stays inside the repository: callers get the plain list.
+    assertThat(jolokiaRepository.fetchQueueNamesWithJolokia())
+      .containsExactly("DLQ", "ExpiryQueue");
   }
 
   // The exception type matters, not just the message: ApiExceptionHandler maps
