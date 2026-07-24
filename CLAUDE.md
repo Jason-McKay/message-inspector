@@ -28,8 +28,8 @@ Maven wrapper (`./mvnw` in Bash, `.\mvnw.cmd` in PowerShell):
 ./mvnw test -Dtest=JolokiaRepositoryTest#methodName
 ```
 
-Infrastructure must be up first — start it from `../infrastructure`, **not** from this
-repo's bare `compose.yaml` (which only defines Artemis with no fixed port mapping):
+For the **dev loop** (edit + `spring-boot:run` / `mvnw`), bring the shared infra up first
+from `../infrastructure` — it provides the broker + Redis the locally-run app talks to:
 
 ```bash
 cd ../infrastructure && docker compose up -d && ./test-containers.sh
@@ -37,6 +37,25 @@ cd ../infrastructure && docker compose up -d && ./test-containers.sh
 
 That brings up Artemis 2.31.2 (:61616 JMS, :8161 console/Jolokia), Redis (:6379), and
 MySQL (unused by this app). Credentials are `admin`/`admin` throughout local dev.
+
+For a **one-command run of the whole backend** (Phase 7), this repo's `compose.yaml` is now
+a self-contained stack — it **builds the app image** (`Dockerfile`) and wires it to its own
+Artemis + Redis, reachable by service name (no shared infra, no dev-broker contact):
+
+```bash
+docker compose up --build      # app :8080, Artemis console :8161, both admin/admin
+```
+
+The app reaches its siblings via env overrides in `compose.yaml`
+(`SPRING_ARTEMIS_BROKER_URL`, `JOLOKIA_URL`, `SPRING_DATA_REDIS_HOST`) — Spring relaxed
+binding over the localhost defaults in `application.properties`. This works because Redis
+host/port is now property-driven (`spring.data.redis.*`); it was hardcoded to
+`localhost:6379` in `RedisConfig` until Phase 7, which had also made
+`RedisQueueRepositoryIntegrationTest` silently depend on a live localhost Redis.
+
+CI/CD (Phase 7): `.github/workflows/ci.yml` runs `./mvnw test` on push/PR;
+`.github/workflows/security.yml` runs the OWASP gate nightly + on demand (needs the
+`NVD_API_KEY` repo secret).
 
 Swagger UI: `http://localhost:8080/api/swagger-ui.html`; OpenAPI JSON at `/api/api-docs`.
 **Dev-profile only** (and dev is the default profile): the base config sets
@@ -58,9 +77,12 @@ other than `dev` serves 404 on both routes. `SpringdocExposureTest` pins this.
   drains both queues before each test. It needs Docker but not the shared infra, and it
   does not touch the dev broker. It is the only automated test that opens a JMS
   connection — everything else at the message level is Mockito-based.
-- `SecurityConfigTest` exercises the real filter chain *and* the live Jolokia path, so
-  **it fails if the shared infra is down**, which reads as a test failure rather than a
-  missing container. Bring `../infrastructure` up before trusting a red run.
+- `SecurityConfigTest` exercises the real filter chain (CORS preflight + a 401 on an
+  unauthenticated request). It is **broker-independent** — the old
+  `testApiIsCurrentlyPermittedWithoutAuthentication`, which hit the live Jolokia path and
+  needed the shared infra, was replaced in Phase 4 by `testApiRequiresAuthentication`
+  (security rejects before any controller/broker call). The whole `./mvnw test` suite now
+  passes with the shared infra down, given Docker is up for the Testcontainers tests.
 - **Verify JMS changes by hand.** Boot the app, produce with
   `MSYS_NO_PATHCONV=1 docker exec dev-artemis /opt/activemq-artemis/bin/artemis producer
   --url tcp://localhost:61616 --destination queue://DLQ --message-count 3 --user admin

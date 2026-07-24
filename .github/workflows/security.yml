@@ -1,0 +1,45 @@
+name: Security (OWASP)
+
+# The OWASP dependency-check scan is a real gate (failBuildOnCVSS=7 in pom.xml), but the
+# first NVD download is slow (~60 min cold, ~2 min warm off the cached DB). Running it on
+# every push would tax every build, so it runs nightly and on demand instead. A failing run
+# means a new HIGH/CRITICAL CVE has appeared in a dependency that is not suppressed.
+on:
+  schedule:
+    - cron: "0 6 * * *"   # daily 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  dependency-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+
+      # The ~600 MB NVD database lives here. Cache it so runs after the first are fast;
+      # dependency-check updates it incrementally. The rolling key saves a fresh copy each
+      # run and restores from the most recent one.
+      - name: Cache NVD database
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: dependency-check-data-${{ github.run_id }}
+          restore-keys: |
+            dependency-check-data-
+
+      - name: Run OWASP dependency-check
+        run: ./mvnw -B dependency-check:check -Dnvd.api.key=${{ secrets.NVD_API_KEY }}
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dependency-check-report
+          path: target/dependency-check-report.html
+          if-no-files-found: warn

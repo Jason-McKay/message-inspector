@@ -1,5 +1,52 @@
+# One-command local run of the whole backend stack:
+#
+#   docker compose up --build
+#
+# Brings up the app (built from the Dockerfile), an Artemis broker and Redis, all wired
+# together. The app is reachable on http://localhost:8080 (Swagger at
+# http://localhost:8080/api/swagger-ui.html, dev profile is the default) and the Artemis
+# console on http://localhost:8161 (admin/admin).
+#
+# This is self-contained: it does NOT use the shared ../infrastructure stack and does not
+# touch the dev broker. It mirrors the same Artemis 2.31.2 image so behaviour matches.
 services:
   artemis:
-    image: 'apache/activemq-artemis:latest'
+    image: apache/activemq-artemis:2.31.2
+    environment:
+      ARTEMIS_USER: admin
+      ARTEMIS_PASSWORD: admin
     ports:
-      - '61616'
+      - "61616:61616"   # JMS
+      - "8161:8161"      # web console / Jolokia
+    healthcheck:
+      # Broker-native check; the CLI ships in the image.
+      test: ["CMD", "/opt/activemq-artemis/bin/artemis", "check", "node", "--up", "--user", "admin", "--password", "admin"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+  app:
+    build: .
+    depends_on:
+      artemis:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      # Reach the sibling containers by service name rather than localhost. These override
+      # the localhost defaults in application.properties via Spring's relaxed binding.
+      SPRING_ARTEMIS_BROKER_URL: tcp://artemis:61616
+      JOLOKIA_URL: http://artemis:8161/console/jolokia
+      SPRING_DATA_REDIS_HOST: redis
+      # Broker/Jolokia creds default to admin/admin, matching the artemis service above.
+    ports:
+      - "8080:8080"
