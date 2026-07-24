@@ -48,6 +48,20 @@ command and read from a machine-friendly report:
   the suppressions file is still empty. The Phase 5 springdoc toggle (docs off outside dev)
   is what finally makes the 22 swagger-ui RetireJS findings *suppressible* — that thread
   connects here.
+
+  > **Update (2026-07-24): the two limitations above are now closed — the gate is live.**
+  > A fresh scan showed the landscape had moved (20 CVEs / 4 deps; netty had picked up new
+  > 7.5 HIGH STOMP/SPDY DoS findings). Triage is complete: **netty bumped 4.1.135 → 4.1.136**
+  > (fix over suppress); **log4j-api/to-slf4j** suppressed *not-applicable* (log4j-core /
+  > log4j-1.2-api are not on the classpath); **swagger-ui/DOMPurify** suppressed
+  > *not-reachable* (springdoc dev-profile-only); **jackson-databind 5.3** accepted with an
+  > `<until>`. Every suppression records its justification and reviewer.
+  > **`failBuildOnCVSS` is now `7`** — the scan gates on HIGH/CRITICAL and reports 0
+  > unsuppressed findings, so it is ready to be the Phase 7 CI gate. Two dependency-check
+  > operational traps found while doing this, worth not rediscovering: a malformed
+  > suppression XML silently disables *all* suppressions (grep the log for
+  > `Unable to parse suppression`), and the JSON report is only refreshed with
+  > `-Dformat=ALL` (the default run writes HTML only, leaving a stale JSON).
 - **First scan is slow** (~60 min to build the ~600 MB NVD cache); subsequent scans are
   ~2 min. A killed first run leaves an H2 lock that must be deleted before retrying. These
   are operational gotchas, documented so they are not rediscovered.
