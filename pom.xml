@@ -20,9 +20,6 @@
     <properties>
         <java.version>21</java.version>
         <lombok.version>1.18.38</lombok.version>
-        <!-- netty is no longer overridden here: the 4.1.110 pin dated from Boot 3.2.6 (which
-             managed 4.1.109) and had become a downgrade, holding netty below the version the
-             parent now manages. Let the parent govern it. -->
         <springdoc.version>2.8.17</springdoc.version> <!-- 2.8.x targets Boot 3.5; 3.x is for Boot 4 -->
 
         <!-- Targeted CVE overrides, each ahead of what the parent manages today.
@@ -32,9 +29,15 @@
              back. Re-check these at every parent bump.
                tomcat        parent 10.1.55 -> 10.1.57 (CVE-2026-59083, -59084, -53434,
                              -55276 critical; -53404 high; -55955, -55956, -50229 medium)
-               commons-lang3 parent 3.17.0  -> 3.20.0  (CVE-2025-48924) -->
+               commons-lang3 parent 3.17.0  -> 3.20.0  (CVE-2025-48924)
+               netty         parent 4.1.135 -> 4.1.136 (CVE-2026-44891 STOMP, -55831/-55833
+                             SPDY DoS, all 7.5 high; fixed in 4.1.136.Final). Note this is a
+                             *re-pin*: netty was deliberately un-pinned in Phase 2 once the
+                             old 4.1.110 downgrade was removed. It comes back only because
+                             new CVEs landed against 4.1.135 with a same-minor patch fix. -->
         <tomcat.version>10.1.57</tomcat.version>
         <commons-lang3.version>3.20.0</commons-lang3.version>
+        <netty.version>4.1.136.Final</netty.version>
         <artemis.version>2.55.0</artemis.version>
     </properties>
 
@@ -214,13 +217,14 @@
                     <suppressionFiles>
                         <suppressionFile>dependency-check-suppressions.xml</suppressionFile>
                     </suppressionFiles>
-                    <!-- 11 is above the maximum CVSS score of 10, so nothing fails the
-                         build. Set explicitly rather than left to default so the value is
-                         visible and the intent is on the record: reporting only, until the
-                         remaining findings have been triaged. Lower it (7 or 8 is typical)
-                         once suppressions exist for what has been judged inapplicable;
-                         that is what turns this into a real gate for the Phase 7 CI. -->
-                    <failBuildOnCVSS>11</failBuildOnCVSS>
+                    <!-- Gate on HIGH and CRITICAL (CVSS >= 7). Lowered from the old
+                         reporting-only 11 on 2026-07-24 once the residual findings were
+                         triaged: netty fixed by the 4.1.136 bump above, and log4j-api /
+                         swagger-ui(DOMPurify) suppressed with recorded justifications in
+                         dependency-check-suppressions.xml. jackson-databind's one 5.3
+                         MEDIUM is documented there (no fix) and sits below this threshold.
+                         This is the gate the Phase 7 CI job enforces. -->
+                    <failBuildOnCVSS>7</failBuildOnCVSS>
                 </configuration>
                 <executions>
                     <execution>
