@@ -10,7 +10,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.message.inspector.message_inspector.dto.JmsQueueDto;
 import com.message.inspector.message_inspector.integration.jolokia.JolokiaAccessException;
 import com.message.inspector.message_inspector.security.SecurityConfig;
 import com.message.inspector.message_inspector.service.QueuePreferenceService;
@@ -28,8 +27,10 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 /**
- * Characterises the HTTP contract of {@link QueueController}: the three queue-discovery
- * routes and the two last-used-queue preference routes.
+ * Characterises the HTTP contract of {@link QueueController}: the queue-names discovery
+ * route and the two last-used-queue preference routes. (The two dead discovery routes,
+ * {@code artemis-straight} and {@code artemis-jolokia}, were deleted along with their
+ * backing code -- only {@code artemis-jolokia/names} ever worked.)
  * <p>
  * Wiring safety net for the Phase 3 package refactor -- both collaborating services are
  * mocked, so this asserts routing and serialisation, not broker or Redis behaviour.
@@ -58,56 +59,6 @@ class QueueControllerTest {
 
   @MockitoBean
   private JwtDecoder jwtDecoder;
-
-  /**
-   * ✅ GET /api/queues/artemis-straight returns the queue list.
-   * <p>
-   * Note this endpoint is dead in production: JmsQueueRepository calls
-   * {@code session.createBrowser(null)}, which always throws, and the catch swallows it
-   * into an empty list -- so the hardcoded placeholder queues below the throw are never
-   * reached and the endpoint returns {@code []}. Verified against a live broker
-   * 2026-07-21. The route and its serialisation are still real, which is what this test
-   * covers; the service is mocked, so the live failure is invisible here.
-   */
-  @Test
-  void testFetchQueuesWithArtemis() throws Exception {
-    when(queueService.fetchQueuesWithArtemis())
-      .thenReturn(List.of(new JmsQueueDto("1", QUEUE_NAME, 10)));
-
-    mockMvc.perform(get("/api/queues/artemis-straight"))
-      .andExpect(status().isOk())
-      .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-      .andExpect(jsonPath("$", hasSize(1)))
-      .andExpect(jsonPath("$[0].queueId").value("1"))
-      .andExpect(jsonPath("$[0].queueName").value(QUEUE_NAME))
-      .andExpect(jsonPath("$[0].messageCount").value(10));
-
-    verify(queueService, times(1)).fetchQueuesWithArtemis();
-  }
-
-  /**
-   * ✅ GET /api/queues/artemis-jolokia returns the queue list from the Jolokia path.
-   * <p>
-   * Like {@code artemis-straight}, this route is dead in production: it returns {@code []}
-   * because the Jolokia response comes back as {@code text/plain} and no converter binds it
-   * to {@code JolokiaReadResponse}, and the broad catch swallows the failure. Only
-   * {@code artemis-jolokia/names} actually works. The service is mocked here, so the route
-   * and its serialisation are what this covers -- the live failure is invisible.
-   */
-  @Test
-  void testFetchQueuesWithJolokia() throws Exception {
-    when(queueService.fetchQueuesWithJolokia())
-      .thenReturn(List.of(new JmsQueueDto("1", "DLQ", 3),
-                          new JmsQueueDto("2", "ExpiryQueue", 0)));
-
-    mockMvc.perform(get("/api/queues/artemis-jolokia"))
-      .andExpect(status().isOk())
-      .andExpect(jsonPath("$", hasSize(2)))
-      .andExpect(jsonPath("$[0].queueName").value("DLQ"))
-      .andExpect(jsonPath("$[1].queueName").value("ExpiryQueue"));
-
-    verify(queueService, times(1)).fetchQueuesWithJolokia();
-  }
 
   /**
    * ✅ GET /api/queues/artemis-jolokia/names returns a bare JSON array of names. The
@@ -142,22 +93,6 @@ class QueueControllerTest {
       .andExpect(jsonPath("$.success").value(false))
       .andExpect(jsonPath("$.message")
         .value("Broker unavailable: Failed to fetch queue details: connection refused"));
-  }
-
-  /**
-   * ✅ The /names route does not collide with the /artemis-jolokia route above it.
-   * Pinned because the two differ only by suffix, and a botched @RequestMapping during
-   * the refactor would silently route one onto the other.
-   */
-  @Test
-  void testJolokiaRoutesDoNotCollide() throws Exception {
-    when(queueService.fetchQueuesWithJolokia()).thenReturn(List.of());
-
-    mockMvc.perform(get("/api/queues/artemis-jolokia"))
-      .andExpect(status().isOk());
-
-    verify(queueService, times(1)).fetchQueuesWithJolokia();
-    verify(queueService, times(0)).fetchQueueNamesWithJolokia();
   }
 
   /**

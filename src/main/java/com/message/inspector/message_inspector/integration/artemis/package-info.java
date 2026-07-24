@@ -16,7 +16,8 @@
  *       a selector, to reject selector-injection input.</li>
  * </ul>
  *
- * <p>{@code JmsQueueRepository.fetchQueuesWithArtemis} exists but does not work — it is the
- * dead JMS-discovery attempt ADR 0001 describes, kept as evidence of the dead end.
+ * <p>Queue <em>discovery</em> is deliberately absent here: JMS cannot enumerate queues, so
+ * that lives in {@code integration.jolokia} (see ADR 0001). An earlier dead JMS-discovery
+ * attempt ({@code JmsQueueRepository}) was removed once ADR 0001 settled the split.
  */
 package com.message.inspector.message_inspector.integration.artemis;

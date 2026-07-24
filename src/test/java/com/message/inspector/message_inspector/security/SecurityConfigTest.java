@@ -22,7 +22,7 @@ class SecurityConfigTest {
 
   public static final String ALLOWED_ORIGIN = "http://localhost:4200";
   public static final String DISALLOWED_ORIGIN = "http://evil.example.com";
-  public static final String ANY_API_PATH = "/api/queues/artemis-straight";
+  public static final String ANY_API_PATH = "/api/queues/artemis-jolokia/names";
 
   @Autowired
   private MockMvc mockMvc;

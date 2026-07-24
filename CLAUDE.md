@@ -79,8 +79,8 @@ mapped under `/api`.
 ```
 config/       Application, Artemis, Redis, RestTemplate, Swagger wiring
 controller/   MessageController, QueueController
-dto/          ApiResponse, JmsMessageDto, JmsQueueDto, JolokiaReadResponse, JolokiaResponse
-integration/  artemis/  JmsMessageRepository, JmsQueueRepository   (JMS)
+dto/          ApiResponse, JmsMessageDto, JolokiaResponse
+integration/  artemis/  JmsMessageRepository                       (JMS)
               jolokia/  JolokiaRepository                          (HTTP/JMX)
               cache/    RedisQueueRepository                       (Redis)
 security/     SecurityConfig
@@ -110,41 +110,20 @@ last-used-queue preference. It is a cache of UI state, not application data.
 
 ### Gotchas
 
-- **`/api/queues/artemis-straight` always returns `[]`.** Earlier notes here claimed it
-  returns hardcoded placeholders (`test.queue.1..3`); that is wrong. The method calls
-  `session.createBrowser(null)`, which throws `Cannot create a browser with a null queue`
-  *before* reaching the placeholder loop, and the broad catch swallows it into an empty
-  list. Verified against a live broker 2026-07-21. The placeholder code is unreachable.
-  Note the mock-based tests cannot see
-  this — they stub the layer that fails.
-- **`/api/queues/artemis-jolokia` always returns `[]` too.** *Two* of the three discovery
-  endpoints are dead; only `/api/queues/artemis-jolokia/names` works. (An earlier note here
-  said Jolokia was "the only working queue-discovery path" — too generous: it is the only
-  working *route*, not the only working Jolokia method.) Two stacked causes, verified live
-  2026-07-21:
-  1. `JolokiaRepository.fetchQueuesWithJolokia` builds `HttpHeaders` with
-     `Accept: application/json`, then passes `null` as the request entity — the header
-     never goes out. Jolokia answers `text/plain`, no converter binds that to
-     `JolokiaReadResponse`, and the broad `catch (Exception)` turns the failure into an
-     empty list and an HTTP 200.
-  2. Even with the header sent, `JolokiaReadResponse.value` is a
-     `Map<String, QueueDetails>` while the requested `/AddressNames` returns a **JSON array
-     of strings** — `fetchQueueNamesWithJolokia` hits the same URL and binds it correctly
-     as `List<String>`. The DTO wants a different MBean query.
-
-  `JolokiaRepositoryTest` cannot catch either: it stubs the RestTemplate with a populated
-  `Map`, a shape the live endpoint never returns, and asserts the URL that is wrong for
-  that DTO. The characterisation tests pin the mock, not the endpoint. `QueueControllerTest`
-  compounds it by describing this route as "the working queue-discovery route".
-- **`delete` and `move-to-dlq` report success for a message that does not exist.**
-  `deleteMessageById`/`moveToDeadLetterQueue` return `void`, so `MessageService` sets
-  `success=true` unless a `JMSException` escapes. The repository knows — it prints
-  "No matching message found for deletion" and discards it. Only `resendMessage` checks.
-  `MessageServiceIT` has `testResendMessage_Missing` but no delete/DLQ equivalent, so the
-  gap in coverage mirrors the gap in behaviour exactly.
-- **`DLQ_NAME = "DLQ_test"` is hardcoded** in `JmsMessageRepository`. "Move to DLQ" writes
-  to an app-invented address, not the broker's real `DLQ`. `MessageServiceIT` asserts
-  against the constant itself, so it passes whatever the constant says.
+- **Only one queue-discovery route exists: `/api/queues/artemis-jolokia/names`.** There
+  used to be two more — `/artemis-straight` (JMS) and `/artemis-jolokia` (Jolokia,
+  queue-list shape) — both of which always returned `[]` for different swallowed reasons.
+  They were **deleted 2026-07-24** along with their backing code (`JmsQueueRepository`,
+  `JolokiaRepository.fetchQueuesWithJolokia`, and the `JmsQueueDto`/`JolokiaReadResponse`
+  DTOs), because only the names route ever worked and the dropdown already uses it.
+- **`delete`, `move-to-dlq` and `resend` all report truthfully on a missing message**
+  (fixed Phase 4). `deleteMessageById`/`moveToDeadLetterQueue` return `boolean`, and
+  `MessageService` sets `success=false, "Message not found."` for a no-op rather than a
+  false success. `MessageServiceIT` covers the missing-message case for all three.
+- **The DLQ target is the `message-inspector.dlq-name` property (default `DLQ`)**, read by
+  `JmsMessageRepository` — not a hardcoded address. The old `DLQ_NAME = "DLQ_test"` constant
+  (which made "Move to DLQ" write to an app-invented address) was replaced in Phase 4 and
+  removed entirely with `JmsQueueRepository` on 2026-07-24.
 - **Browsing a queue that does not exist auto-creates the address**, so typos permanently
   pollute the queue list on the dev broker.
 - ~~**The Jolokia envelope leaks to the client.**~~ **FIXED 2026-07-23**:
