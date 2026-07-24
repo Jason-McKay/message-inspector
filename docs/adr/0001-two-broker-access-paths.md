@@ -30,10 +30,17 @@ HTTP+JSON on the console port (`:8161`). That is already enabled in any deployme
 someone can use the web console, needs no extra port, and is a trivial `RestTemplate`
 call.
 
-An attempt at doing queue discovery over JMS exists in the codebase
-(`JmsQueueRepository.fetchQueuesWithArtemis`). It does not work and never did — it calls
-`session.createBrowser(null)`, which throws, and returns an empty list. It stands as
+An attempt at doing queue discovery over JMS existed in the codebase
+(`JmsQueueRepository.fetchQueuesWithArtemis`). It did not work and never did — it called
+`session.createBrowser(null)`, which throws, and returned an empty list. It stood as
 evidence of the dead end rather than as a working alternative.
+
+> **Update (2026-07-24):** the dead JMS path (`JmsQueueRepository`) and the dead
+> Jolokia queue-list path (`JolokiaRepository.fetchQueuesWithJolokia`), along with their
+> two `/api/queues/artemis-straight` and `/api/queues/artemis-jolokia` endpoints, were
+> **deleted**. Only `/api/queues/artemis-jolokia/names` ever worked and it is what
+> remains. This decision (JMS for messages, Jolokia for discovery) is unchanged; only the
+> dead-end evidence code is gone.
 
 ## Decision
 

@@ -61,6 +61,5 @@ don't probe with typos.
 
 1. Infra healthy (`test-containers.sh` green).
 2. Backend up: Swagger loads, `GET /api/queues/artemis-jolokia/names` returns a JSON
-   array (the only working discovery route — the other two return `[]` by design flaw,
-   see CLAUDE.md).
+   array (the queue-discovery route; the two dead `[]` routes were deleted 2026-07-24).
 3. Frontend up: queue dropdown populates at `http://localhost:4200`.

@@ -1,6 +1,5 @@
 package com.message.inspector.message_inspector.controller;
 
-import com.message.inspector.message_inspector.dto.JmsQueueDto;
 import com.message.inspector.message_inspector.service.QueuePreferenceService;
 import com.message.inspector.message_inspector.service.QueueService;
 import jakarta.jms.JMSException;
@@ -21,24 +20,6 @@ public class QueueController {
 
   private final QueueService queueService;
   private final QueuePreferenceService queuePreferenceService;
-
-  /**
-   * Fetch all queues from Artemis straight.
-   */
-  @GetMapping("/artemis-straight")
-  public ResponseEntity<List<JmsQueueDto>> fetchQueuesWithArtemis() throws JMSException {
-    List<JmsQueueDto> queues = queueService.fetchQueuesWithArtemis();
-    return ResponseEntity.ok(queues);
-  }
-
-  /**
-   * Fetch all queues from Artemis using Jolokia.
-   */
-  @GetMapping("/artemis-jolokia")
-  public ResponseEntity<List<JmsQueueDto>> fetchQueuesWithJolokia() throws JMSException {
-    List<JmsQueueDto> queues = queueService.fetchQueuesWithJolokia();
-    return ResponseEntity.ok(queues);
-  }
 
   /**
    * Fetch all queue names from Artemis using Jolokia. Returns a bare JSON array: the

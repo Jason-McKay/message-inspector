@@ -6,13 +6,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
-import com.message.inspector.message_inspector.dto.JmsQueueDto;
-import com.message.inspector.message_inspector.dto.JolokiaReadResponse;
 import com.message.inspector.message_inspector.dto.JolokiaResponse;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.MockitoAnnotations;
 import org.springframework.core.ParameterizedTypeReference;
@@ -24,18 +21,16 @@ import org.springframework.web.client.HttpClientErrorException;
 import org.springframework.web.client.ResourceAccessException;
 import org.springframework.web.client.RestTemplate;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Characterisation tests for {@link JolokiaRepository}.
  *
  * <p>These pin down what the class does <em>today</em>. They were written ahead of the move
  * to this {@code integration/jolokia} package and carried through it unchanged, which is
- * what makes that move verifiable. They deliberately document current behaviour rather
- * than ideal behaviour — including the broad exception swallowing in
- * {@code fetchQueuesWithJolokia}, which turns any failure into an empty list.
+ * what makes that move verifiable. Only {@code fetchQueueNamesWithJolokia} remains -- the
+ * dead {@code fetchQueuesWithJolokia} path (and its {@code JolokiaReadResponse} DTO) was
+ * deleted along with the two dead discovery endpoints it served.
  */
 class JolokiaRepositoryTest {
 
@@ -53,74 +48,6 @@ class JolokiaRepositoryTest {
     jolokiaRepository = new JolokiaRepository(jolokiaRestTemplate);
     ReflectionTestUtils.setField(jolokiaRepository, "jolokiaUrl", JOLOKIA_URL);
     ReflectionTestUtils.setField(jolokiaRepository, "brokerName", BROKER_NAME);
-  }
-
-  // ---------------------------------------------------------------------
-  // fetchQueuesWithJolokia
-  // ---------------------------------------------------------------------
-
-  @Test
-  @DisplayName("fetchQueuesWithJolokia maps each value entry to a JmsQueueDto")
-  void fetchQueuesWithJolokia_mapsEntriesToDtos() {
-    JolokiaReadResponse.QueueDetails orders = queueDetails("orders", 7);
-    JolokiaReadResponse.QueueDetails dlq = queueDetails("DLQ", 0);
-
-    Map<String, JolokiaReadResponse.QueueDetails> value = new LinkedHashMap<>();
-    value.put("queue-1", orders);
-    value.put("queue-2", dlq);
-
-    JolokiaReadResponse body = new JolokiaReadResponse();
-    body.setValue(value);
-
-    when(jolokiaRestTemplate.exchange(any(String.class), eq(HttpMethod.GET), eq(null), eq(JolokiaReadResponse.class)))
-      .thenReturn(ResponseEntity.ok(body));
-
-    List<JmsQueueDto> queues = jolokiaRepository.fetchQueuesWithJolokia();
-
-    assertThat(queues).hasSize(2);
-    assertThat(queues.get(0).getQueueId()).isEqualTo("queue-1");
-    assertThat(queues.get(0).getQueueName()).isEqualTo("orders");
-    assertThat(queues.get(0).getMessageCount()).isEqualTo(7);
-    assertThat(queues.get(1).getQueueId()).isEqualTo("queue-2");
-    assertThat(queues.get(1).getQueueName()).isEqualTo("DLQ");
-    assertThat(queues.get(1).getMessageCount()).isZero();
-  }
-
-  @Test
-  @DisplayName("fetchQueuesWithJolokia targets the broker's AddressNames attribute")
-  void fetchQueuesWithJolokia_buildsExpectedUrl() {
-    JolokiaReadResponse body = new JolokiaReadResponse();
-    body.setValue(new LinkedHashMap<>());
-
-    when(jolokiaRestTemplate.exchange(any(String.class), eq(HttpMethod.GET), eq(null), eq(JolokiaReadResponse.class)))
-      .thenReturn(ResponseEntity.ok(body));
-
-    jolokiaRepository.fetchQueuesWithJolokia();
-
-    ArgumentCaptor<String> url = ArgumentCaptor.forClass(String.class);
-    org.mockito.Mockito.verify(jolokiaRestTemplate)
-      .exchange(url.capture(), eq(HttpMethod.GET), eq(null), eq(JolokiaReadResponse.class));
-
-    assertThat(url.getValue())
-      .isEqualTo(JOLOKIA_URL + "/read/org.apache.activemq.artemis:broker=\"" + BROKER_NAME + "\"/AddressNames");
-  }
-
-  @Test
-  @DisplayName("fetchQueuesWithJolokia returns an empty list when the body is null (NPE is swallowed)")
-  void fetchQueuesWithJolokia_nullBody_returnsEmptyList() {
-    when(jolokiaRestTemplate.exchange(any(String.class), eq(HttpMethod.GET), eq(null), eq(JolokiaReadResponse.class)))
-      .thenReturn(ResponseEntity.ok(null));
-
-    assertThat(jolokiaRepository.fetchQueuesWithJolokia()).isEmpty();
-  }
-
-  @Test
-  @DisplayName("fetchQueuesWithJolokia returns an empty list when the transport fails")
-  void fetchQueuesWithJolokia_transportFailure_returnsEmptyList() {
-    when(jolokiaRestTemplate.exchange(any(String.class), eq(HttpMethod.GET), eq(null), eq(JolokiaReadResponse.class)))
-      .thenThrow(new ResourceAccessException("broker unreachable"));
-
-    assertThat(jolokiaRepository.fetchQueuesWithJolokia()).isEmpty();
   }
 
   // ---------------------------------------------------------------------
@@ -184,12 +111,5 @@ class JolokiaRepositoryTest {
     assertThatThrownBy(() -> jolokiaRepository.fetchQueueNamesWithJolokia())
       .isInstanceOf(JolokiaAccessException.class)
       .hasMessageContaining("Failed to fetch queue details");
-  }
-
-  private static JolokiaReadResponse.QueueDetails queueDetails(String name, int messageCount) {
-    JolokiaReadResponse.QueueDetails details = new JolokiaReadResponse.QueueDetails();
-    details.setName(name);
-    details.setMessageCount(messageCount);
-    return details;
   }
 }

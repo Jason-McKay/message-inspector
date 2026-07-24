@@ -134,10 +134,6 @@ and the dependency-maintenance workflow.
 
 Honest and deliberately deferred:
 
-- **Two of the three queue-discovery endpoints are dead.** `/artemis-straight` and
-  `/artemis-jolokia` both return `[]` (each for a different swallowed reason); only
-  `/artemis-jolokia/names` works. Delete-or-implement is an open decision — the UI's
-  `/queues` view renders all three, so two of its tables are permanently empty by design.
 - **Users are in-memory.** No database, no self-service; a real user store is the first
   thing that would bring a DB (and a `domain` package) into the app.
 - **No refresh tokens.** A token expires and you log in again.
