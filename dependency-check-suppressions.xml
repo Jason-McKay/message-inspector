@@ -24,28 +24,89 @@
     The CSV output is the practical triage worklist.
 
     ===========================================================================
-    NOTHING IS SUPPRESSED YET. This file is deliberately empty of entries.
-
-    12 CVEs across 4 dependencies remain open as of 2026-07-20 (log4j-api,
-    swagger-ui bundled JS, jackson-databind). None have been triaged, so none
-    can honestly be suppressed. Do not add entries here to make the number go
-    down; add them only after reading the CVE references and reaching one of
-    the three conclusions above.
-
-    Template - copy, fill in, and remove the surrounding comment:
-
-    <suppress>
-      <notes><![CDATA[
-        CVE-XXXX-NNNNN against <artifact>.
-        Decision: NOT REACHABLE.
-        Reason:   <what specifically makes it unreachable here>
-        Assumes:  <the condition that must stay true>
-        Reviewed: <name>, <date>
-      ]]></notes>
-      <packageUrl regex="true">^pkg:maven/group/artifact@.*$</packageUrl>
-      <cve>CVE-XXXX-NNNNN</cve>
-    </suppress>
+    Triaged 2026-07-24 (Jason McKay). The build gates at CVSS >= 7 (see the
+    dependency-check-maven config in pom.xml). Dispositions:
+      - netty (3x 7.5 HIGH, STOMP/SPDY codec DoS) -> FIXED, not suppressed:
+        netty.version pinned to 4.1.136.Final in pom.xml.
+      - log4j-api           -> NOT APPLICABLE (below).
+      - swagger-ui/DOMPurify -> NOT REACHABLE in prod (below).
+      - jackson-databind    -> NO FIX + ACCEPTED, below the gate (below).
     ===========================================================================
   -->
+
+  <!--
+    log4j-api 2.24.3: CVE-2026-34477, CVE-2026-34479, CVE-2026-49844.
+    Decision: NOT APPLICABLE (wrong artifact).
+    Reason:   These CVEs are in log4j-core and the log4j-1.2-api bridge
+              (e.g. CVE-2026-34479 is the Log4j1XmlLayout output-escaping flaw,
+              fixed in log4j 2.25.4). This app ships only log4j-api (the SLF4J
+              facade) and log4j-to-slf4j (the bridge to Logback); both are flagged
+              because they share the apache:log4j CPE. `mvn dependency:tree`
+              confirms neither log4j-core nor log4j-1.2-api is on the classpath,
+              and no Log4j layout is configured. The vulnerable code cannot run.
+    Assumes:  logging stays SLF4J/Logback via log4j-to-slf4j; log4j-core and
+              log4j-1.2-api never get added. Listed by specific CVE on purpose, so
+              a genuine future log4j-api/to-slf4j CVE is NOT auto-suppressed.
+    Reviewed: Jason McKay, 2026-07-24
+  -->
+  <suppress>
+    <filePath regex="true">.*[/\\]log4j-(api|to-slf4j)-.*\.jar</filePath>
+    <cve>CVE-2026-34477</cve>
+    <cve>CVE-2026-34479</cve>
+    <cve>CVE-2026-49844</cve>
+  </suppress>
+
+  <!--
+    swagger-ui 5.32.2 bundled JS: DOMPurify 3.3.2 (swagger-ui-bundle.js and
+    swagger-ui-es-bundle.js). Multiple RetireJS findings (CVE-2026-41238/41239/
+    41240/49458/49459/49978/65898-65903, GHSA-c2j3-45gr-mqc4), mostly XSS-class.
+    Decision: NOT REACHABLE in production.
+    Reason:   These are client-side XSS/sanitiser-bypass issues in the DOMPurify
+              copy bundled inside Swagger UI. Swagger UI (and the OpenAPI docs) are
+              served only under the `dev` profile: the base config sets
+              springdoc.api-docs.enabled=false / springdoc.swagger-ui.enabled=false,
+              re-enabled only in application-dev.properties (pinned by
+              SpringdocExposureTest). In any non-dev deployment both routes 404, so
+              the bundled DOMPurify never loads in a browser. Scoped to the bundled
+              DOMPurify package because the same "not served in prod" reasoning
+              covers every finding in that bundle equally.
+    Assumes:  Swagger UI is never enabled in a production/internet-facing profile.
+              If that changes, remove this block and upgrade springdoc/swagger-ui.
+    Reviewed: Jason McKay, 2026-07-24
+  -->
+  <suppress>
+    <filePath regex="true">.*swagger-ui-.*\.jar.*</filePath>
+    <vulnerabilityName>CVE-2026-41238</vulnerabilityName>
+    <vulnerabilityName>CVE-2026-41239</vulnerabilityName>
+    <vulnerabilityName>CVE-2026-41240</vulnerabilityName>
+    <vulnerabilityName>CVE-2026-49458</vulnerabilityName>
+    <vulnerabilityName>CVE-2026-49459</vulnerabilityName>
+    <vulnerabilityName>CVE-2026-49978</vulnerabilityName>
+    <vulnerabilityName>CVE-2026-65898</vulnerabilityName>
+    <vulnerabilityName>CVE-2026-65899</vulnerabilityName>
+    <vulnerabilityName>CVE-2026-65900</vulnerabilityName>
+    <vulnerabilityName>CVE-2026-65901</vulnerabilityName>
+    <vulnerabilityName>CVE-2026-65902</vulnerabilityName>
+    <vulnerabilityName>CVE-2026-65903</vulnerabilityName>
+    <vulnerabilityName>GHSA-c2j3-45gr-mqc4</vulnerabilityName>
+  </suppress>
+
+  <!--
+    jackson-databind 2.21.4: CVE-2026-54515 (MEDIUM 5.3).
+    Decision: NO FIX + ACCEPTED.
+    Reason:   Already at the version the Spring Boot 3.5.16 parent BOM manages; no
+              patched release is available to upgrade to. Score 5.3 is below the
+              build's CVSS >= 7 gate, so it does not fail the build. Recorded here so
+              the report stays clean AND the acceptance is revisited rather than
+              forgotten.
+    Assumes:  no jackson-databind patch > 2.21.4 addressing this appears. The <until>
+              forces this back into the report for review; re-check then and upgrade
+              if a fix exists.
+    Reviewed: Jason McKay, 2026-07-24
+  -->
+  <suppress until="2027-01-24Z">
+    <filePath regex="true">.*[/\\]jackson-databind-.*\.jar</filePath>
+    <cve>CVE-2026-54515</cve>
+  </suppress>
 
 </suppressions>
