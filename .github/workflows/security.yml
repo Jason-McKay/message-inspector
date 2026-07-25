@@ -1,7 +1,7 @@
 name: Security (OWASP)
 
-# The OWASP dependency-check scan is a real gate (failBuildOnCVSS=7 in pom.xml), but the
-# first NVD download is slow (~60 min cold, ~2 min warm off the cached DB). Running it on
+# The OWASP dependency-check scan is a real gate (failBuildOnCVSS=7 in pom.xml). The NVD
+# download is the slow part (~6 min cold, ~2 min warm off the cached DB). Running it on
 # every push would tax every build, so it runs nightly and on demand instead. A failing run
 # means a new HIGH/CRITICAL CVE has appeared in a dependency that is not suppressed.
 on:

@@ -33,7 +33,7 @@ coverage and the wrong default makes the pipeline either slow or dishonest:
 - **Security (`security.yml`): the OWASP gate runs nightly (cron) + `workflow_dispatch`,
   not per push.** The gate is already real (`failBuildOnCVSS=7`, see
   [0006](0006-dependency-maintenance-workflow.md)); running it on every push would tax every
-  build with a scan whose first run is ~60 min and whose warm run is ~2 min. Nightly keeps
+  build with a scan whose cold run is ~6 min and whose warm run is ~2 min. Nightly keeps
   the NVD cache warm (`actions/cache`) and surfaces newly-disclosed CVEs without gating
   unrelated pushes. The NVD API key comes from the `NVD_API_KEY` **repo secret**
   (`-Dnvd.api.key=...`), never committed.
@@ -63,8 +63,11 @@ properties. This is the same principle Phase 4 applied to `ArtemisConfig` (which
 - **The security job depends on an out-of-band secret.** Without `NVD_API_KEY` set on the
   repo, the scan is NVD-rate-limited to the point of being unusable. This is documented in
   the README and the roadmap; the secret was added 2026-07-24.
-- **The first scheduled scan is slow** (~60 min to build the ~600 MB NVD cache); every run
-  after is ~2 min off the cache.
+- **The first scan builds the ~600 MB NVD cache** (~6 min cold, observed on the first CI
+  run 2026-07-25 — the full 370k-record NVD pull); every run after is ~2 min off the cache.
+  (This beat the ~60 min figure from the Phase 2 *local* first scan noted in
+  [0006](0006-dependency-maintenance-workflow.md) — a different machine, and the NVD API has
+  since sped up.)
 - **No published image.** Running the containerised app elsewhere means building it there.
   Publishing to a registry (e.g. GHCR) is a natural, deliberately-deferred addition.
 - **Frontend headless Chrome is new ground in CI.** The recipe is the established local one;
