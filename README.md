@@ -1,5 +1,8 @@
 # Message Inspector — backend
 
+[![CI](https://github.com/Jason-McKay/message-inspector/actions/workflows/ci.yml/badge.svg)](https://github.com/Jason-McKay/message-inspector/actions/workflows/ci.yml)
+[![Security (OWASP)](https://github.com/Jason-McKay/message-inspector/actions/workflows/security.yml/badge.svg)](https://github.com/Jason-McKay/message-inspector/actions/workflows/security.yml)
+
 A browser-based tool for inspecting **ActiveMQ Artemis JMS queues**: list queues, browse
 the messages on a queue, view a message, and resend / delete / move it to a dead-letter
 queue. This repository is the **Spring Boot 3.5 / Java 21** API; the Angular UI lives in a
@@ -47,6 +50,22 @@ package ([ADR 0004](docs/adr/0004-layered-package-structure.md)). Every package 
 `package-info.java` explaining what it is for.
 
 ## Running it
+
+### Quick start — one command (Docker)
+
+The fastest way to run the whole backend. This repo's `compose.yaml` builds the app image
+and wires it to its own Artemis + Redis (self-contained — it does **not** use the shared
+`infrastructure/` stack):
+
+```bash
+docker compose up --build
+```
+
+App on `:8080` (Swagger at `/api/swagger-ui.html`), Artemis console on `:8161`, all
+credentials `admin`/`admin`. The app reaches its siblings by service name via env overrides
+in the compose file.
+
+### Dev loop — run from source
 
 Needs **JDK 21** and **Docker** (for the broker and Redis).
 
@@ -111,18 +130,26 @@ or Jolokia) is unavailable, **500** otherwise, all with the same body shape.
 ./mvnw verify    # the above + MessageServiceIT against a real Artemis container
 ```
 
-`./mvnw test` is broker-free by design. `./mvnw verify` runs `MessageServiceIT`, which
+`./mvnw test` needs no Artemis broker, but it **does need Docker** — a couple of tests spin
+up Redis via Testcontainers. `./mvnw verify` additionally runs `MessageServiceIT`, which
 spins up its own Artemis via Testcontainers. Note that **no test opens a JMS connection in
 the unit suite** — a green `test` run says nothing about broker compatibility, so
 client/broker version changes are verified with a documented manual pass (see `CLAUDE.md`).
+
+**CI:** `./mvnw test` runs on every push/PR via
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml); the OWASP gate runs nightly and
+on demand via [`.github/workflows/security.yml`](.github/workflows/security.yml)
+([ADR 0007](docs/adr/0007-ci-cd-pipeline.md)).
 
 ## Security & dependencies
 
 - **Auth:** stateless JWT bearer, in-memory users, role-gated destructive endpoints
   ([ADR 0005](docs/adr/0005-jwt-bearer-over-cookie-session.md)).
 - **CVEs:** an OWASP Dependency-Check pass took the project from **133 → 12** unique CVEs
-  (−91%), **5 → 0** criticals. The scan is a one-command standing gate
-  ([ADR 0006](docs/adr/0006-dependency-maintenance-workflow.md)).
+  (−91%), **5 → 0** criticals. It is a real build gate (`failBuildOnCVSS=7`) that runs
+  locally on demand and **nightly in CI**
+  ([ADR 0006](docs/adr/0006-dependency-maintenance-workflow.md),
+  [ADR 0007](docs/adr/0007-ci-cd-pipeline.md)).
 
 ## Design decisions
 
