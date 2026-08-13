@@ -57,6 +57,14 @@ CI/CD (Phase 7): `.github/workflows/ci.yml` runs `./mvnw test` on push/PR;
 `.github/workflows/security.yml` runs the OWASP gate nightly + on demand (needs the
 `NVD_API_KEY` repo secret).
 
+`http/message-inspector.http` is a runnable end-to-end scenario for the whole API — logs
+in as both `admin` and `jason`, captures the JWTs, and asserts the behaviours the tests
+can't reach from outside (401 unauthenticated, 403 on an ADMIN-only delete as USER, the
+`SAFE_MESSAGE_ID` 400 on selector injection, and truthful failure on a missing message).
+Select the `dev` environment from `http/http-client.env.json` before running; anything
+real goes in `http/http-client.private.env.json`, which is gitignored. Works in IntelliJ's
+HTTP Client and VS Code's REST Client.
+
 Swagger UI: `http://localhost:8080/api/swagger-ui.html`; OpenAPI JSON at `/api/api-docs`.
 **Dev-profile only** (and dev is the default profile): the base config sets
 `springdoc.*.enabled=false`, so any run with `SPRING_PROFILES_ACTIVE` set to something

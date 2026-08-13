@@ -59,5 +59,6 @@ jacoco*.exec
 # Local environment files
 .env
 .env.*
+http/http-client.private.env.json
 /src/main/resources/info/jolokiaApi_addressNames.json
 /src/main/resources/info/jolokiaApiResponse.json
