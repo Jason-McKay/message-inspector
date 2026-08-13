@@ -57,6 +57,14 @@ CI/CD (Phase 7): `.github/workflows/ci.yml` runs `./mvnw test` on push/PR;
 `.github/workflows/security.yml` runs the OWASP gate nightly + on demand (needs the
 `NVD_API_KEY` repo secret).
 
+`http/message-inspector.http` is a runnable end-to-end scenario for the whole API — logs
+in as both `admin` and `jason`, captures the JWTs, and asserts the behaviours the tests
+can't reach from outside (401 unauthenticated, 403 on an ADMIN-only delete as USER, the
+`SAFE_MESSAGE_ID` 400 on selector injection, and truthful failure on a missing message).
+Select the `dev` environment from `http/http-client.env.json` before running; anything
+real goes in `http/http-client.private.env.json`, which is gitignored. Works in IntelliJ's
+HTTP Client and VS Code's REST Client.
+
 Swagger UI: `http://localhost:8080/api/swagger-ui.html`; OpenAPI JSON at `/api/api-docs`.
 **Dev-profile only** (and dev is the default profile): the base config sets
 `springdoc.*.enabled=false`, so any run with `SPRING_PROFILES_ACTIVE` set to something
@@ -164,11 +172,16 @@ last-used-queue preference. It is a cache of UI state, not application data.
   such path with `requireValidMessageId` against `SAFE_MESSAGE_ID`. Any new selector-taking
   method must call it too — without it, an ID like `x' OR '1'='1` widens the selector and
   the wrong message gets consumed or DLQ'd.
-- **`SecurityConfig` permits `/api/**` unauthenticated**, including the destructive
-  endpoints, which makes the trailing `anyRequest().authenticated()` unreachable. This is
-  deliberate until the auth phase; the file carries a tripwire comment noting that CSRF
-  must be re-enabled if auth ever moves to cookies (CORS already sets
-  `allowCredentials(true)` for `http://localhost:4200`).
+- **`SecurityConfig` requires a bearer token on everything** except `/api/auth/login`,
+  `/error` and the dev-only Swagger routes (Phase 4; the Phase 2 permit-all on `/api/**`
+  is gone). Auth is stateless JWT — `oauth2ResourceServer`, `SessionCreationPolicy.STATELESS`
+  — so CSRF stays disabled without opening a hole, and CORS sets `allowCredentials(false)`;
+  the old tripwire about re-enabling CSRF applies only if auth ever moves to cookies.
+  Role gating for the destructive endpoints is **method security**
+  (`@PreAuthorize("hasRole('ADMIN')")` on `MessageController`), not path matchers, because
+  `move-to-dlq` sits mid-path and PathPattern rejects a `**` in the middle. The token's
+  bare `roles` claim is mapped to `ROLE_`-prefixed authorities by a
+  `JwtAuthenticationConverter`.
 - `jolokiaRestTemplate` registers a Jackson converter for `text/plain` because Jolokia
   returns JSON under that content type.
 - **Destination names must come from `getQueueName()`, not `toString()`.** On Artemis,

@@ -1,0 +1,165 @@
+### Message Inspector API — end-to-end scenario
+#
+# Run top to bottom. Requests 1 and 2 capture JWTs that later requests reuse, so the
+# ADMIN/USER authorization split can be exercised without retyping tokens.
+#
+# Prerequisites: the shared infra is up (`cd ../infrastructure && docker compose up -d`)
+# and the app is running (`./mvnw spring-boot:run`). Seed a message first if you want
+# requests 5 onward to return anything -- see CLAUDE.md's "Verify JMS changes by hand".
+#
+# Select the environment (`dev`) before running. Credentials come from
+# http-client.env.json; put anything real in http-client.private.env.json, which is
+# gitignored.
+
+### 1. Log in as admin (role ADMIN -- may delete and move to DLQ)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUser}}",
+  "password": "{{adminPassword}}"
+}
+
+> {%
+    client.global.set("adminToken", response.body.token);
+    client.test("admin login succeeds", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+        client.assert(response.body.token !== null, "No token in response");
+        client.assert(response.body.roles.includes("ADMIN"), "Expected ADMIN role");
+    });
+%}
+
+### 2. Log in as jason (role USER -- browse and resend only)
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{userUser}}",
+  "password": "{{userPassword}}"
+}
+
+> {%
+    client.global.set("userToken", response.body.token);
+    client.test("user login succeeds with USER role only", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+        client.assert(response.body.roles.includes("USER"), "Expected USER role");
+        client.assert(!response.body.roles.includes("ADMIN"), "USER must not hold ADMIN");
+    });
+%}
+
+### 3. Bad credentials are rejected
+# ApiExceptionHandler maps AuthenticationException to 401.
+POST {{host}}/api/auth/login
+Content-Type: application/json
+
+{
+  "username": "{{adminUser}}",
+  "password": "definitely-not-the-password"
+}
+
+> {%
+    client.test("bad credentials return 401", function () {
+        client.assert(response.status === 401, "Expected 401, got " + response.status);
+    });
+%}
+
+### 4. Unauthenticated request is rejected
+# SecurityConfig rejects before any controller or broker call is made.
+GET {{host}}/api/queues/artemis-jolokia/names
+
+> {%
+    client.test("no token returns 401", function () {
+        client.assert(response.status === 401, "Expected 401, got " + response.status);
+    });
+%}
+
+### 5. List queue names (Jolokia route -- the only discovery route that exists)
+GET {{host}}/api/queues/artemis-jolokia/names
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("returns a bare JSON array, not a Jolokia envelope", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+        client.assert(Array.isArray(response.body), "Expected an array; the JMX envelope leaked");
+    });
+%}
+
+### 6. Save last-used queue (user id comes from the principal, not the body)
+POST {{host}}/api/queues/last-used
+Authorization: Bearer {{userToken}}
+Content-Type: text/plain
+
+{{queueName}}
+
+### 7. Read last-used queue back
+# Absence is a 200 with an empty body, not a 404.
+GET {{host}}/api/queues/last-used
+Authorization: Bearer {{userToken}}
+
+> {%
+    client.test("preference round-trips for this principal", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+    });
+%}
+
+### 8. Browse a queue
+GET {{host}}/api/messages/queue/{{queueName}}
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("browse returns a list", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+        client.assert(Array.isArray(response.body), "Expected an array");
+    });
+    if (Array.isArray(response.body) && response.body.length > 0) {
+        client.global.set("messageId", response.body[0].messageId);
+    }
+%}
+
+### 9. Malformed message ID is rejected at 400, and the input is not echoed back
+# The SAFE_MESSAGE_ID guard in JmsMessageRepository. Without it this selector-injection
+# payload widens the JMS selector to match every message.
+GET {{host}}/api/messages/queue/{{queueName}}/message/x' OR '1'='1
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("selector injection is rejected", function () {
+        client.assert(response.status === 400, "Expected 400, got " + response.status);
+        client.assert(
+            JSON.stringify(response.body).indexOf("OR '1'='1") === -1,
+            "The offending input was echoed back to the caller"
+        );
+    });
+%}
+
+### 10. USER may not delete -- expect 403
+# @PreAuthorize("hasRole('ADMIN')") on the destructive endpoints.
+DELETE {{host}}/api/messages/queue/{{queueName}}/message/{{messageId}}
+Authorization: Bearer {{userToken}}
+
+> {%
+    client.test("USER is forbidden from deleting", function () {
+        client.assert(response.status === 403, "Expected 403, got " + response.status);
+    });
+%}
+
+### 11. Deleting a message that does not exist reports failure truthfully
+# Fixed in Phase 4 -- this used to report a false success.
+DELETE {{host}}/api/messages/queue/{{queueName}}/message/ID:no-such-message-00000
+Authorization: Bearer {{adminToken}}
+
+> {%
+    client.test("missing message is not a false success", function () {
+        client.assert(response.status === 200, "Expected 200, got " + response.status);
+        client.assert(response.body.success === false, "Expected success=false for a no-op");
+    });
+%}
+
+### 12. Resend a message (requires request 8 to have captured a messageId)
+POST {{host}}/api/messages/queue/{{queueName}}/message/{{messageId}}/resend
+Authorization: Bearer {{userToken}}
+
+### 13. Move a message to the DLQ -- ADMIN only, destructive
+# Target address is the message-inspector.dlq-name property, default DLQ.
+POST {{host}}/api/messages/queue/{{queueName}}/message/{{messageId}}/move-to-dlq
+Authorization: Bearer {{adminToken}}
