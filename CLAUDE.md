@@ -8,10 +8,10 @@ Backend of Message Inspector: a Spring Boot 3.2 / Java 21 tool to browse, resend
 and DLQ-move messages on an ActiveMQ Artemis broker. It is the server half of a two-repo
 full-stack app:
 
-- Backend (this repo): `C:\Users\jason\Projects\message-inspector\`
-- Frontend: `C:\Users\jason\Projects\message-inspector-ui\` (Angular 16, Node 20.11.1, :4200)
-- Shared dev infra: `C:\Users\jason\Projects\infrastructure\` (own git repo, local only)
-- Roadmap: `C:\Users\jason\Claude\plans\message-inspector-completion-plan.md` — phased plan with the
+- Backend: this repo.
+- Frontend: `message-inspector-ui` (Angular 16, Node 20.11.1, :4200).
+- Shared dev infra: `infrastructure` (separate repo, local only).
+- Roadmap: a local planning doc kept outside the repo — phased plan with the
   current phase, known gaps, and deliberately deferred work. **Read it before starting
   non-trivial work**; it explains why several rough edges below are still rough.
 
