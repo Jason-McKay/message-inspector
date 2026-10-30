@@ -27,7 +27,9 @@
     Triaged 2026-07-24 (Jason McKay). The build gates at CVSS >= 7 (see the
     dependency-check-maven config in pom.xml). Dispositions:
       - netty (3x 7.5 HIGH, STOMP/SPDY codec DoS) -> FIXED, not suppressed:
-        netty.version pinned to 4.1.136.Final in pom.xml.
+        netty.version was pinned to 4.1.136.Final. That pin was removed on
+        2026-10-30: Boot 4.1.2 manages Netty 4.2.19.Final, which is past the fix.
+        Putting 4.1.136 back would downgrade it.
       - log4j-api           -> NOT APPLICABLE (below).
       - swagger-ui/DOMPurify -> NOT REACHABLE in prod (below).
       - jackson-databind    -> NO FIX + ACCEPTED, below the gate (below).
@@ -35,7 +37,7 @@
   -->
 
   <!--
-    log4j-api 2.24.3: CVE-2026-34477, CVE-2026-34479, CVE-2026-49844.
+    log4j-api (2.25.5 on Boot 4.1.2): CVE-2026-34477, CVE-2026-34479, CVE-2026-49844.
     Decision: NOT APPLICABLE (wrong artifact).
     Reason:   These CVEs are in log4j-core and the log4j-1.2-api bridge
               (e.g. CVE-2026-34479 is the Log4j1XmlLayout output-escaping flaw,
@@ -47,7 +49,9 @@
     Assumes:  logging stays SLF4J/Logback via log4j-to-slf4j; log4j-core and
               log4j-1.2-api never get added. Listed by specific CVE on purpose, so
               a genuine future log4j-api/to-slf4j CVE is NOT auto-suppressed.
-    Reviewed: Jason McKay, 2026-07-24
+    Reviewed: Jason McKay, 2026-07-24. Re-checked 2026-10-30 on the Boot 4.1.2
+              classpath: still log4j-api + log4j-to-slf4j only (2.25.5), no log4j-core
+              and no log4j-1.2-api. 2.25.5 is also past the 2.25.4 fix named above.
   -->
   <suppress>
     <filePath regex="true">.*[/\\]log4j-(api|to-slf4j)-.*\.jar</filePath>
@@ -57,8 +61,8 @@
   </suppress>
 
   <!--
-    swagger-ui 5.32.2 bundled JS: DOMPurify 3.3.2 (swagger-ui-bundle.js and
-    swagger-ui-es-bundle.js). Multiple RetireJS findings (CVE-2026-41238/41239/
+    swagger-ui bundled JS (springdoc 3.2.0 ships swagger-ui 5.34.0; the original
+    triage was against 5.32.2 / DOMPurify 3.3.2). Multiple RetireJS findings (CVE-2026-41238/41239/
     41240/49458/49459/49978/65898-65903, GHSA-c2j3-45gr-mqc4), mostly XSS-class.
     Decision: NOT REACHABLE in production.
     Reason:   These are client-side XSS/sanitiser-bypass issues in the DOMPurify
@@ -72,7 +76,10 @@
               covers every finding in that bundle equally.
     Assumes:  Swagger UI is never enabled in a production/internet-facing profile.
               If that changes, remove this block and upgrade springdoc/swagger-ui.
-    Reviewed: Jason McKay, 2026-07-24
+    Reviewed: Jason McKay, 2026-07-24. Re-checked 2026-10-30: springdoc is still
+              off outside the dev profile (SpringdocExposureTest), so the
+              not-reachable assumption still holds for the new bundle. These entries
+              name specific findings; a new CVE id is not covered until it is triaged.
   -->
   <suppress>
     <filePath regex="true">.*swagger-ui-.*\.jar.*</filePath>
@@ -92,20 +99,20 @@
   </suppress>
 
   <!--
-    jackson-databind 2.21.4: CVE-2026-54515 (MEDIUM 5.3).
-    Decision: NO FIX + ACCEPTED.
-    Reason:   Already at the version the Spring Boot 3.5.16 parent BOM manages; no
-              patched release is available to upgrade to. Score 5.3 is below the
-              build's CVSS >= 7 gate, so it does not fail the build. Recorded here so
-              the report stays clean AND the acceptance is revisited rather than
-              forgotten.
-    Assumes:  no jackson-databind patch > 2.21.4 addressing this appears. The <until>
-              forces this back into the report for review; re-check then and upgrade
-              if a fix exists.
-    Reviewed: Jason McKay, 2026-07-24
+    jackson-databind 2.x: CVE-2026-54515 (MEDIUM 5.3).
+    Decision: NO FIX + ACCEPTED, scoped to the Jackson 2 artifact.
+    Reason:   Boot 4.1.2's HTTP stack uses Jackson 3 (tools.jackson.core:jackson-databind
+              3.1.7). Jackson 2 databind 2.21.7 is still on the classpath because
+              springdoc 3.2.0 pulls com.fasterxml.jackson.core:jackson-databind. The
+              original triage (2.21.4, Boot 3.5.16) found no patch. Score 5.3 is below
+              the CVSS >= 7 gate. The file match is limited to jackson-databind-2.* so
+              a finding against the Jackson 3 jar is not hidden by this entry.
+    Assumes:  no Jackson 2 patch addressing CVE-2026-54515 is adopted, and the
+              finding does not apply to Jackson 3. The <until> forces a review.
+    Reviewed: Jason McKay, 2026-07-24. Scope narrowed 2026-10-30 for the Boot 4 split.
   -->
   <suppress until="2027-01-24Z">
-    <filePath regex="true">.*[/\\]jackson-databind-.*\.jar</filePath>
+    <filePath regex="true">.*[/\\]jackson-databind-2\..*\.jar</filePath>
     <cve>CVE-2026-54515</cve>
   </suppress>
 

@@ -4,7 +4,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
+import org.springframework.http.converter.json.JacksonJsonHttpMessageConverter;
 import org.springframework.web.client.RestTemplate;
 
 import java.nio.charset.StandardCharsets;
@@ -39,8 +39,10 @@ public class RestTemplateConfig {
       return execution.execute(request, body);
     });
 
-    // Add a message converter for 'text/plain' that treats it as JSON
-    MappingJackson2HttpMessageConverter jacksonConverter = new MappingJackson2HttpMessageConverter();
+    // Add a message converter for 'text/plain' that treats it as JSON.
+    // Jolokia returns JSON under text/plain; the default Jackson 3 converter does not
+    // read that media type. Same registration the Jackson 2 converter used to do.
+    JacksonJsonHttpMessageConverter jacksonConverter = new JacksonJsonHttpMessageConverter();
     List<MediaType> mediaTypes = new ArrayList<>(jacksonConverter.getSupportedMediaTypes());
     mediaTypes.add(MediaType.TEXT_PLAIN); // handle Jolokia's text/plain JSON
     jacksonConverter.setSupportedMediaTypes(mediaTypes);

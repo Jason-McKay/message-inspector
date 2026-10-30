@@ -1,6 +1,6 @@
 # 6. OWASP Dependency-Check is the dependency-maintenance gate
 
-- **Status:** Accepted
+- **Status:** Accepted. The version-policy sentence below ("stay on Spring Boot 3.x") is superseded by [0008](0008-spring-boot-4-1.md).
 - **Date decided:** 2026-07-20 (Phase 2, the security/dependency pass)
 - **Date recorded:** 2026-07-23, during the Phase 6 documentation pass
 

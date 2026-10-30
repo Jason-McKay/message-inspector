@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.5.16</version> <!-- 3.2.x is past OSS EOL; 3.5.x is the current supported 3.x line -->
+        <version>4.1.2</version> <!-- current 4.1 patch; notification-platform is on 4.1.1 -->
         <relativePath/>
     </parent>
 
@@ -19,33 +19,34 @@
 
     <properties>
         <java.version>21</java.version>
-        <lombok.version>1.18.38</lombok.version>
-        <springdoc.version>2.8.17</springdoc.version> <!-- 2.8.x targets Boot 3.5; 3.x is for Boot 4 -->
+        <springdoc.version>3.2.0</springdoc.version> <!-- 3.2.x is built on Boot 4.1.2; 2.8.x was Boot 3.5 -->
 
-        <!-- Targeted CVE overrides, each ahead of what the parent manages today.
-             EXPIRY: drop each one as soon as the parent catches up. An override that
-             outlives its reason silently becomes a downgrade, which is exactly how the
-             old netty 4.1.110 and jackson-bom 2.19.0 pins ended up holding this build
-             back. Re-check these at every parent bump.
-               tomcat        parent 10.1.55 -> 10.1.57 (CVE-2026-59083, -59084, -53434,
-                             -55276 critical; -53404 high; -55955, -55956, -50229 medium)
-               commons-lang3 parent 3.17.0  -> 3.20.0  (CVE-2025-48924)
-               netty         parent 4.1.135 -> 4.1.136 (CVE-2026-44891 STOMP, -55831/-55833
-                             SPDY DoS, all 7.5 high; fixed in 4.1.136.Final). Note this is a
-                             *re-pin*: netty was deliberately un-pinned in Phase 2 once the
-                             old 4.1.110 downgrade was removed. It comes back only because
-                             new CVEs landed against 4.1.135 with a same-minor patch fix. -->
-        <tomcat.version>10.1.57</tomcat.version>
-        <commons-lang3.version>3.20.0</commons-lang3.version>
-        <netty.version>4.1.136.Final</netty.version>
+        <!-- Targeted overrides, each re-checked against Boot 4.1.2 (ADR 0002).
+             Dropped on this bump because keeping them would invert into a downgrade
+             or a no-op:
+               tomcat        was 10.1.57; parent now manages Tomcat 11.0.27 (Servlet 6.1).
+                             A 10.1 pin does not even run on Boot 4.
+               netty         was 4.1.136.Final; parent now manages 4.2.19.Final.
+               commons-lang3 was 3.20.0; parent now manages 3.20.0 (pure redundancy).
+               lombok        was 1.18.38; parent now manages 1.18.48.
+               mockito       was 5.18.0 / mockito-inline 5.2.0; parent manages 5.23.0
+                             and the inline mock maker is part of mockito-core.
+               commons-beanutils was 1.11.0 in dependencyManagement; Artemis 2.55.0
+                             now declares 1.11.0 itself (CVE-2025-48734).
+             Still ahead of the parent:
+               artemis       parent 2.53.0 -> 2.55.0. Boot 4.1 imports
+                             org.apache.artemis:artemis-bom, so this property still
+                             applies to the post-TLP coordinates.
+                             EXPIRY: drop when the parent manages >= 2.55.0. -->
         <artemis.version>2.55.0</artemis.version>
     </properties>
 
     <dependencies>
-        <!-- Core Spring Boot -->
+        <!-- Core Spring Boot. starter-web and starter-oauth2-resource-server are
+             deprecated aliases in Boot 4; the names below are the supported ones. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
+            <artifactId>spring-boot-starter-webmvc</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -65,29 +66,23 @@
              version. -->
         <dependency>
             <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+            <artifactId>spring-boot-starter-security-oauth2-resource-server</artifactId>
         </dependency>
 
         <!-- OpenAPI / Swagger UI -->
         <dependency>
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
-            <version>${springdoc.version}</version> <!-- consider upgrading when new safe versions available -->
+            <version>${springdoc.version}</version>
         </dependency>
 
-        <!-- Lombok, Jackson -->
+        <!-- Lombok. Version comes from the parent. Jackson 3 (tools.jackson) arrives
+             via starter-webmvc; do not re-declare com.fasterxml.jackson.core:jackson-databind.
+             That explicit Jackson 2 dependency is what a previous pin used to freeze. -->
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>
-            <version>${lombok.version}</version>
             <scope>provided</scope>
-        </dependency>
-        <!-- Declared because ApplicationConfig uses ObjectMapper directly; version comes
-             from the parent. Do not re-pin it via a jackson-bom import: that override was
-             what held jackson at 2.19.0 while the parent had moved to 2.21.x. -->
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
         </dependency>
 
         <!-- Testing -->
@@ -96,39 +91,17 @@
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- @WithMockUser / SecurityMockMvcRequestPostProcessors for the auth tests; not
-             pulled in by starter-test. -->
+        <!-- @WebMvcTest / @AutoConfigureMockMvc live in the webmvc test module in Boot 4;
+             starter-test no longer brings them. -->
         <dependency>
-            <groupId>org.springframework.security</groupId>
-            <artifactId>spring-security-test</artifactId>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webmvc-test</artifactId>
             <scope>test</scope>
         </dependency>
-        <!-- org.apache.artemis, not org.apache.activemq: Artemis became a top-level
-             Apache project and migrated groupId. The old coordinates still resolve, but
-             only via a relocation stub. See
-             https://artemis.apache.org/artemis-tlp-groupid-migration -->
+        <!-- @WithMockUser needs Boot's security test slice, not only spring-security-test. -->
         <dependency>
-            <groupId>org.apache.artemis</groupId>
-            <artifactId>artemis-junit-5</artifactId>
-            <version>2.55.0</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-core</artifactId>
-            <version>5.18.0</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.mockito</groupId>
-            <artifactId>mockito-inline</artifactId>
-            <version>5.2.0</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>it.ozimov</groupId>
-            <artifactId>embedded-redis</artifactId>
-            <version>0.7.3</version>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-security-test</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>
@@ -136,26 +109,14 @@
             <artifactId>testcontainers</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Renamed in Testcontainers 2 (Boot 4.1 manages 2.0.x). The old artifact id
+             was junit-jupiter. -->
         <dependency>
             <groupId>org.testcontainers</groupId>
-            <artifactId>junit-jupiter</artifactId>
+            <artifactId>testcontainers-junit-jupiter</artifactId>
             <scope>test</scope>
         </dependency>
     </dependencies>
-
-    <dependencyManagement>
-        <dependencies>
-            <!-- Targeted CVE override: commons-beanutils arrives transitively via the
-                 Artemis client chain and is NOT managed by the Spring Boot parent, so it
-                 cannot be pinned with a property. 1.10.1 -> 1.11.0 for CVE-2025-48734.
-                 EXPIRY: remove once Artemis ships a client depending on >= 1.11.0. -->
-            <dependency>
-                <groupId>commons-beanutils</groupId>
-                <artifactId>commons-beanutils</artifactId>
-                <version>1.11.0</version>
-            </dependency>
-        </dependencies>
-    </dependencyManagement>
 
     <build>
         <plugins>
@@ -165,17 +126,18 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
 
-            <!-- Surefire -->
+            <!-- Surefire. Version is the parent's (3.5.6 on Boot 4.1.2). The old explicit
+                 3.2.5 pin was behind that. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
-                <version>3.2.5</version>
                 <configuration>
                     <!-- api.version pins the Docker API version used by docker-java (via Testcontainers).
                          Its default (1.32) is below the 1.40 minimum enforced by Docker Engine 29+, which
                          rejects it with an empty HTTP 400 from /info and makes every Testcontainers test
                          fail with "Could not find a valid Docker environment". Note DOCKER_API_VERSION is
-                         a docker-CLI-only variable; docker-java reads this system property instead. -->
+                         a docker-CLI-only variable; docker-java reads this system property instead.
+                         Engine 29.1 accepts 1.44 (its minimum) through 1.52. -->
                     <argLine>-Djdk.attach.allowAttachSelf -XX:+EnableDynamicAgentLoading -Dapi.version=1.44</argLine>
                 </configuration>
             </plugin>
@@ -190,7 +152,6 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-failsafe-plugin</artifactId>
-                <version>3.2.5</version>
                 <configuration>
                     <!-- Same Docker API pin as surefire, and for the same reason. -->
                     <argLine>-Djdk.attach.allowAttachSelf -XX:+EnableDynamicAgentLoading -Dapi.version=1.44</argLine>
@@ -211,19 +172,14 @@
             <plugin>
                 <groupId>org.owasp</groupId>
                 <artifactId>dependency-check-maven</artifactId>
-                <version>12.2.2</version>
+                <version>13.0.0</version>
                 <configuration>
                     <nvdApiKey>${nvd.api.key}</nvdApiKey>
                     <suppressionFiles>
                         <suppressionFile>dependency-check-suppressions.xml</suppressionFile>
                     </suppressionFiles>
-                    <!-- Gate on HIGH and CRITICAL (CVSS >= 7). Lowered from the old
-                         reporting-only 11 on 2026-07-24 once the residual findings were
-                         triaged: netty fixed by the 4.1.136 bump above, and log4j-api /
-                         swagger-ui(DOMPurify) suppressed with recorded justifications in
-                         dependency-check-suppressions.xml. jackson-databind's one 5.3
-                         MEDIUM is documented there (no fix) and sits below this threshold.
-                         This is the gate the Phase 7 CI job enforces. -->
+                    <!-- Gate on HIGH and CRITICAL (CVSS >= 7). This is the gate the
+                         security CI job enforces. -->
                     <failBuildOnCVSS>7</failBuildOnCVSS>
                 </configuration>
                 <executions>
@@ -237,7 +193,7 @@
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>versions-maven-plugin</artifactId>
-                <version>2.15.0</version>
+                <version>2.21.0</version>
             </plugin>
         </plugins>
     </build>
