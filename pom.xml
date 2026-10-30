@@ -43,6 +43,13 @@
                              but they fail the OWASP gate all the same.
                              EXPIRY: drop when the parent manages >= 2.57.0. -->
         <artemis.version>2.57.0</artemis.version>
+
+        <!-- Build plugins ahead of the parent's pluginManagement. Set through the
+             parent's own version properties (ADR 0002), not a <version> on the plugin.
+               surefire/failsafe parent 3.5.6 -> 3.6.1. No CVE; taken for currency.
+                             EXPIRY: drop both when the parent manages >= 3.6.1. -->
+        <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
+        <maven-failsafe-plugin.version>3.6.1</maven-failsafe-plugin.version>
     </properties>
 
     <dependencies>
@@ -130,8 +137,8 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
 
-            <!-- Surefire. Version is the parent's (3.5.6 on Boot 4.1.2). The old explicit
-                 3.2.5 pin was behind that. -->
+            <!-- Surefire. Version comes from maven-surefire-plugin.version above (3.6.1;
+                 the parent manages 3.5.6). The old explicit 3.2.5 pin was behind both. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
