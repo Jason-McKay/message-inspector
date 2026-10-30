@@ -72,6 +72,18 @@ responsibility.
 `artemis.version` 2.55.0 will become a downgrade on a future parent bump, exactly as
 [0002](0002-dependency-version-overrides-expire.md) describes. The pom says when to delete it.
 
+> **Update (2026-10-30): dependency bump on top of 4.1.2.** The first full NVD scan of the
+> Boot 4.1.2 classpath failed the gate on `artemis-core-client` 2.55.0: CVE-2026-57967,
+> -49364, -67593 (critical) and -49362, -49363 (high). All are published as affecting
+> Artemis 2.50.0 through 2.56.0, fixed in 2.57.0. They are broker-side protocol flaws matched
+> onto the client jar by CPE, so **`artemis.version` moved 2.55.0 → 2.57.0** (fix over
+> suppress), and its expiry is now "parent manages >= 2.57.0". The unit suite,
+> `MessageServiceIT` and the manual JMS pass against the 2.31.2 broker all passed on 2.57.0.
+> The same advisories list ActiveMQ Artemis 1.0.0 through 2.44.0 as affected too, which
+> covers the 2.31.2 broker image; the client bump does nothing for the broker.
+> **Surefire / Failsafe 3.6.1** and **versions-maven-plugin 2.23.0** were also taken ahead
+> of the parent, through its own version properties, each with an `EXPIRY` in the pom.
+
 ## What was left alone
 
 - **The broker image stays `apache/activemq-artemis:2.31.2`** in `compose.yaml` and
@@ -80,6 +92,7 @@ responsibility.
   `CLAUDE.md`), not part of moving the framework.
 - **Surefire / Failsafe stay on the parent's 3.5.6**, not the newer 3.6.1 published a few
   days before this change. The explicit 3.2.5 pin was the stale part.
+  > Update (2026-10-30): taken to 3.6.1 after all; see the update under Consequences.
 - **Maven stays on the 3.9 line** (wrapper and the Docker build image moved 3.9.9 → 3.9.16).
   Maven 4 is still a release candidate.
 - **`RestTemplate` was not rewritten to `RestClient`.** Boot 4 did not require it, and the
