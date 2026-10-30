@@ -39,11 +39,12 @@ in use".
 
 ```bash
 cd ../message-inspector-ui
-nvm use 20.11.1               # Angular 16 needs Node 20; global default is v24
+nvm use 24.18.0               # .nvmrc pin for Angular 22; also the global default
 npm start
 ```
 
-Headless tests there: `npx ng test --watch=false --browsers=ChromeHeadless`.
+Headless tests there: `npx ng test --watch=false --browsers=ChromeHeadless`; lint with
+`npm run lint` (CI runs both).
 
 ## Seeding test messages
 

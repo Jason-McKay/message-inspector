@@ -42,6 +42,10 @@ coverage and the wrong default makes the pipeline either slow or dishonest:
   the deliverable is a reproducible local run, not a distribution.
 - **Frontend CI:** Node pinned to **20.11.1** (`.nvmrc`; Angular 16 rejects Node 24), headless
   Karma (`npx ng test --watch=false --browsers=ChromeHeadless`), then `npm run build`.
+  > **Update (2026-10-30): the frontend is now Angular 22.2.4 on Node 24.18.0.** Angular 20+
+  > rejects the 20.11.1 pin, so `.nvmrc` moved to 24.18.0. CI now runs `npm run lint`
+  > (angular-eslint) before the headless tests, and `npm run build` writes to
+  > `dist/message-inspector-ui/browser/` (the esbuild application builder's layout).
 
 **Enabling fix — external-system config must be property-driven, not hardcoded.** `RedisConfig`
 had hardcoded `localhost:6379`, which made `spring.data.redis.*` inert. That broke *both*

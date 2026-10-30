@@ -89,7 +89,7 @@ Needs **JDK 21** and **Docker** (for the broker and Redis).
    Boots on `:8080`. Log in with `jason`/`jason` (USER) or `admin`/`admin` (ADMIN).
 
 3. **Frontend** — see the [UI repo](https://github.com/Jason-McKay/message-inspector-ui)
-   (`npm start`, needs Node 20).
+   (`npm start`, needs Node 24.18.0).
 
 **API docs (dev only):** Swagger UI at `http://localhost:8080/api/swagger-ui.html`,
 OpenAPI JSON at `/api/api-docs`. These are served **only under the `dev` profile** (the
