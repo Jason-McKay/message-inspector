@@ -34,11 +34,26 @@
                commons-beanutils was 1.11.0 in dependencyManagement; Artemis 2.55.0
                              now declares 1.11.0 itself (CVE-2025-48734).
              Still ahead of the parent:
-               artemis       parent 2.53.0 -> 2.55.0. Boot 4.1 imports
+               artemis       parent 2.53.0 -> 2.57.0. Boot 4.1 imports
                              org.apache.artemis:artemis-bom, so this property still
-                             applies to the post-TLP coordinates.
-                             EXPIRY: drop when the parent manages >= 2.55.0. -->
-        <artemis.version>2.55.0</artemis.version>
+                             applies to the post-TLP coordinates. Moved 2.55.0 -> 2.57.0
+                             for CVE-2026-57967, -49364, -67593 (critical) and -49362,
+                             -49363 (high), all "2.50.0 through 2.56.0, fixed in 2.57.0".
+                             They are broker-side flaws CPE-matched onto the client jar,
+                             but they fail the OWASP gate all the same.
+                             EXPIRY: drop when the parent manages >= 2.57.0. -->
+        <artemis.version>2.57.0</artemis.version>
+
+        <!-- Build plugins ahead of the parent's pluginManagement. Set through the
+             parent's own version properties (ADR 0002), not a <version> on the plugin.
+               surefire/failsafe parent 3.5.6 -> 3.6.1. No CVE; taken for currency.
+                             EXPIRY: drop both when the parent manages >= 3.6.1.
+               versions      parent 2.21.0 -> 2.23.0. Replaces an explicit
+                             <version>2.21.0</version> that only restated the parent.
+                             EXPIRY: drop when the parent manages >= 2.23.0. -->
+        <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
+        <maven-failsafe-plugin.version>3.6.1</maven-failsafe-plugin.version>
+        <versions-maven-plugin.version>2.23.0</versions-maven-plugin.version>
     </properties>
 
     <dependencies>
@@ -126,8 +141,8 @@
                 <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
 
-            <!-- Surefire. Version is the parent's (3.5.6 on Boot 4.1.2). The old explicit
-                 3.2.5 pin was behind that. -->
+            <!-- Surefire. Version comes from maven-surefire-plugin.version above (3.6.1;
+                 the parent manages 3.5.6). The old explicit 3.2.5 pin was behind both. -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
@@ -189,11 +204,10 @@
                 </executions>
             </plugin>
 
-            <!-- Versions plugin -->
+            <!-- Versions plugin. Version comes from versions-maven-plugin.version above. -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>versions-maven-plugin</artifactId>
-                <version>2.21.0</version>
             </plugin>
         </plugins>
     </build>

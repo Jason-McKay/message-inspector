@@ -80,6 +80,15 @@
               off outside the dev profile (SpringdocExposureTest), so the
               not-reachable assumption still holds for the new bundle. These entries
               name specific findings; a new CVE id is not covered until it is triaged.
+    Added:    2026-10-30, CVE-2026-116802 (low), -116803 (high), -116804 (critical),
+              found by the first full scan on the Boot 4.1.2 classpath. All three are
+              in the DOMPurify 3.4.16 that swagger-ui 5.34.0 bundles; the fix is
+              DOMPurify 3.4.17, but 5.34.0 is the latest swagger-ui (webjar and npm),
+              so there is no version to upgrade to. Same not-reachable reasoning as
+              above. Drop these three once a swagger-ui release bundling
+              DOMPurify >= 3.4.17 is available through springdoc.
+              The earlier ids above no longer match anything on this bundle.
+    Reviewed: Jason McKay, 2026-10-30 (the three ids added above).
   -->
   <suppress>
     <filePath regex="true">.*swagger-ui-.*\.jar.*</filePath>
@@ -96,6 +105,9 @@
     <vulnerabilityName>CVE-2026-65902</vulnerabilityName>
     <vulnerabilityName>CVE-2026-65903</vulnerabilityName>
     <vulnerabilityName>GHSA-c2j3-45gr-mqc4</vulnerabilityName>
+    <vulnerabilityName>CVE-2026-116802</vulnerabilityName>
+    <vulnerabilityName>CVE-2026-116803</vulnerabilityName>
+    <vulnerabilityName>CVE-2026-116804</vulnerabilityName>
   </suppress>
 
   <!--
