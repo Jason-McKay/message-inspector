@@ -47,9 +47,13 @@
         <!-- Build plugins ahead of the parent's pluginManagement. Set through the
              parent's own version properties (ADR 0002), not a <version> on the plugin.
                surefire/failsafe parent 3.5.6 -> 3.6.1. No CVE; taken for currency.
-                             EXPIRY: drop both when the parent manages >= 3.6.1. -->
+                             EXPIRY: drop both when the parent manages >= 3.6.1.
+               versions      parent 2.21.0 -> 2.23.0. Replaces an explicit
+                             <version>2.21.0</version> that only restated the parent.
+                             EXPIRY: drop when the parent manages >= 2.23.0. -->
         <maven-surefire-plugin.version>3.6.1</maven-surefire-plugin.version>
         <maven-failsafe-plugin.version>3.6.1</maven-failsafe-plugin.version>
+        <versions-maven-plugin.version>2.23.0</versions-maven-plugin.version>
     </properties>
 
     <dependencies>
@@ -200,11 +204,10 @@
                 </executions>
             </plugin>
 
-            <!-- Versions plugin -->
+            <!-- Versions plugin. Version comes from versions-maven-plugin.version above. -->
             <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>versions-maven-plugin</artifactId>
-                <version>2.21.0</version>
             </plugin>
         </plugins>
     </build>
