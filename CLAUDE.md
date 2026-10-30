@@ -9,7 +9,7 @@ and DLQ-move messages on an ActiveMQ Artemis broker. It is the server half of a 
 full-stack app:
 
 - Backend: this repo.
-- Frontend: `message-inspector-ui` (Angular 16, Node 20.11.1, :4200).
+- Frontend: `message-inspector-ui` (Angular 22.2.4, Node 24.18.0, :4200).
 - Shared dev infra: `infrastructure` (separate repo, local only).
 - Roadmap: a local planning doc kept outside the repo — phased plan with the
   current phase, known gaps, and deliberately deferred work. **Read it before starting
