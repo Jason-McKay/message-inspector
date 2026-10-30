@@ -80,4 +80,17 @@ class SecurityConfigTest {
     mockMvc.perform(get("/api/queues/artemis-jolokia/names"))
       .andExpect(status().isUnauthorized());
   }
+
+  /**
+   * ✅ The MCP endpoint is not open by default: a JSON-RPC call without a token is rejected
+   * with 401 by the same chain, before the MCP router (and so any tool) runs. ADR 0009.
+   */
+  @Test
+  void testMcpRequiresAuthentication() throws Exception {
+    mockMvc.perform(post("/mcp")
+        .contentType("application/json")
+        .header("Accept", "application/json, text/event-stream")
+        .content("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"tools/list\"}"))
+      .andExpect(status().isUnauthorized());
+  }
 }

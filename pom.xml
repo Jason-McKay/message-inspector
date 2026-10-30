@@ -20,6 +20,7 @@
     <properties>
         <java.version>21</java.version>
         <springdoc.version>3.2.0</springdoc.version> <!-- 3.2.x is built on Boot 4.1.2; 2.8.x was Boot 3.5 -->
+        <spring-ai.version>2.0.2</spring-ai.version> <!-- 2.0.x is built on Boot 4.1.2; 2.1.x targets Boot 4.2 -->
 
         <!-- Targeted overrides, each re-checked against Boot 4.1.2 (ADR 0002).
              Dropped on this bump because keeping them would invert into a downgrade
@@ -89,6 +90,33 @@
             <groupId>org.springdoc</groupId>
             <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
             <version>${springdoc.version}</version>
+        </dependency>
+
+        <!-- MCP server for AI agents, Streamable HTTP over the existing WebMVC stack and
+             security chain (ADR 0009).
+             Exclusions:
+             - spring-boot-starter-web: the deprecated Boot 4 alias; it adds nothing over
+               starter-webmvc above.
+             - swagger-annotations-jakarta: Spring AI brings 2.2.38 on a shorter path than
+               springdoc's swagger-core 2.2.55, so nearest-wins silently downgraded the
+               annotations under springdoc. Excluding it here lets swagger-core's own
+               version win. If springdoc is ever removed, drop this exclusion with it.
+               EXPIRY: drop when spring-ai-model's swagger-annotations-jakarta is >= the
+               swagger-core-jakarta springdoc brings (re-check at each bump of either). -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-server-webmvc</artifactId>
+            <version>${spring-ai.version}</version>
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-web</artifactId>
+                </exclusion>
+                <exclusion>
+                    <groupId>io.swagger.core.v3</groupId>
+                    <artifactId>swagger-annotations-jakarta</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
 
         <!-- Lombok. Version comes from the parent. Jackson 3 (tools.jackson) arrives

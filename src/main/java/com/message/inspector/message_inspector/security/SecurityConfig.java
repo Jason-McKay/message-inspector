@@ -1,7 +1,10 @@
 package com.message.inspector.message_inspector.security;
 
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.authorization.AuthorizationEventPublisher;
+import org.springframework.security.authorization.SpringAuthorizationEventPublisher;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
@@ -24,6 +27,10 @@ import java.util.List;
  * security ({@code @PreAuthorize} on {@code MessageController}) rather than path matchers,
  * because {@code move-to-dlq} sits mid-path and Spring's PathPattern does not allow
  * {@code **} in the middle of a pattern.
+ * <p>
+ * The MCP endpoint ({@code /mcp}, ADR 0009) needs no matcher of its own: it falls under
+ * {@code anyRequest().authenticated()} like the REST API, and its admin tools are gated by
+ * the same {@code @PreAuthorize} on {@code agent/QueueAdminTools}.
  */
 @Configuration
 @EnableWebSecurity
@@ -81,6 +88,18 @@ public class SecurityConfig {
     JwtAuthenticationConverter converter = new JwtAuthenticationConverter();
     converter.setJwtGrantedAuthoritiesConverter(authorities);
     return converter;
+  }
+
+  /**
+   * Publishes authorization denials as {@code AuthorizationDeniedEvent}s; without a publisher
+   * bean Spring Security discards them. The MCP admin tools need the event: a call that
+   * {@code @PreAuthorize} rejects never reaches the method, so the event is the only place
+   * to audit it (see {@code agent/AgentAuthorizationAuditListener}). Publishing changes no
+   * decision. REST denials are published too and nothing listens for them.
+   */
+  @Bean
+  public AuthorizationEventPublisher authorizationEventPublisher(ApplicationEventPublisher applicationEventPublisher) {
+    return new SpringAuthorizationEventPublisher(applicationEventPublisher);
   }
 
   @Bean
