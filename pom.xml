@@ -34,11 +34,15 @@
                commons-beanutils was 1.11.0 in dependencyManagement; Artemis 2.55.0
                              now declares 1.11.0 itself (CVE-2025-48734).
              Still ahead of the parent:
-               artemis       parent 2.53.0 -> 2.55.0. Boot 4.1 imports
+               artemis       parent 2.53.0 -> 2.57.0. Boot 4.1 imports
                              org.apache.artemis:artemis-bom, so this property still
-                             applies to the post-TLP coordinates.
-                             EXPIRY: drop when the parent manages >= 2.55.0. -->
-        <artemis.version>2.55.0</artemis.version>
+                             applies to the post-TLP coordinates. Moved 2.55.0 -> 2.57.0
+                             for CVE-2026-57967, -49364, -67593 (critical) and -49362,
+                             -49363 (high), all "2.50.0 through 2.56.0, fixed in 2.57.0".
+                             They are broker-side flaws CPE-matched onto the client jar,
+                             but they fail the OWASP gate all the same.
+                             EXPIRY: drop when the parent manages >= 2.57.0. -->
+        <artemis.version>2.57.0</artemis.version>
     </properties>
 
     <dependencies>
