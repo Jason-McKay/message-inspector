@@ -36,11 +36,14 @@ public class AuthController {
     Authentication authentication = authenticationManager.authenticate(
       new UsernamePasswordAuthenticationToken(request.getUsername(), request.getPassword()));
 
-    // Strip the ROLE_ prefix Spring adds to authorities so the token carries bare role
-    // names; the resource-server converter re-adds the prefix when it reads the token back.
+    // Keep only the application's roles. Spring Security 7 also grants a FACTOR_*
+    // authority for the password factor; that is not a role the UI knows about, and
+    // copying it into the token would change the login payload. Strip the ROLE_ prefix
+    // so the token carries bare names; the resource-server converter re-adds it.
     List<String> roles = authentication.getAuthorities().stream()
       .map(GrantedAuthority::getAuthority)
-      .map(authority -> authority.startsWith("ROLE_") ? authority.substring("ROLE_".length()) : authority)
+      .filter(authority -> authority.startsWith("ROLE_"))
+      .map(authority -> authority.substring("ROLE_".length()))
       .toList();
 
     String token = tokenService.issue(authentication.getName(), roles);

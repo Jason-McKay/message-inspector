@@ -5,7 +5,7 @@
 
 A browser-based tool for inspecting **ActiveMQ Artemis JMS queues**: list queues, browse
 the messages on a queue, view a message, and resend / delete / move it to a dead-letter
-queue. This repository is the **Spring Boot 3.5 / Java 21** API; the Angular UI lives in a
+queue. This repository is the **Spring Boot 4.1 / Java 21** API; the Angular UI lives in a
 [separate repository](https://github.com/Jason-McKay/message-inspector-ui).
 
 > The UI, with screenshots, is documented in the
@@ -48,6 +48,11 @@ Packages are named by **role**, not by a template — `integration/{artemis,jolo
 is the external-system boundary, and there is deliberately no `domain`/`mapper`/`repository`
 package ([ADR 0004](docs/adr/0004-layered-package-structure.md)). Every package carries a
 `package-info.java` explaining what it is for.
+
+HTTP JSON is **Jackson 3** (Boot 4's default), with
+`spring.jackson.use-jackson2-defaults=true` so response documents keep the Jackson 2
+shape the Angular client already parses ([ADR 0008](docs/adr/0008-spring-boot-4-1.md)).
+The routes, status codes, and `ApiResponse` body are unchanged.
 
 ## Running it
 
@@ -155,7 +160,7 @@ on demand via [`.github/workflows/security.yml`](.github/workflows/security.yml)
 
 The non-obvious choices are written up as [Architecture Decision Records](docs/adr/) — the
 two-transport split, why Redis over `localStorage`, the layered structure, the auth model,
-and the dependency-maintenance workflow.
+the dependency-maintenance workflow, and the move to Spring Boot 4.1.
 
 ## Known gaps
 

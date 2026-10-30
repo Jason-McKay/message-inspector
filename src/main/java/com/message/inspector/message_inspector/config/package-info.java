@@ -5,7 +5,8 @@
  * builds the JMS {@code ConnectionFactory} (reading {@code spring.artemis.*} so the broker
  * URL/credentials are externalised), {@code RedisConfig} the Redis template,
  * {@code RestTemplateConfig} the {@code jolokiaRestTemplate}, {@code ApplicationConfig} the
- * shared {@code ObjectMapper}, and {@code SwaggerConfig} the OpenAPI bean.
+ * JMS JSON {@code MessageConverter} (HTTP JSON uses Boot's auto-configured {@code JsonMapper}),
+ * and {@code SwaggerConfig} the OpenAPI bean.
  *
  * <p>Security wiring lives in its own {@code security} package rather than here, because it
  * is a cross-cutting concern with its own decisions (ADR 0005), not plumbing. Everything in

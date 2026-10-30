@@ -1,8 +1,8 @@
 # syntax=docker/dockerfile:1
 
 # ---- build stage -------------------------------------------------------------
-# Pinned to the same Java 21 / Maven line the project builds with locally.
-FROM maven:3.9.9-eclipse-temurin-21 AS build
+# Pinned to the same Java 21 / Maven 3.9 line the wrapper uses (.mvn/wrapper).
+FROM maven:3.9.16-eclipse-temurin-21 AS build
 WORKDIR /build
 
 # Resolve dependencies first so this layer is cached unless pom.xml changes.

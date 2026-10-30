@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-Backend of Message Inspector: a Spring Boot 3.2 / Java 21 tool to browse, resend, delete,
+Backend of Message Inspector: a Spring Boot 4.1 / Java 21 tool to browse, resend, delete,
 and DLQ-move messages on an ActiveMQ Artemis broker. It is the server half of a two-repo
 full-stack app:
 
