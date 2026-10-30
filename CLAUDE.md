@@ -46,6 +46,11 @@ Artemis + Redis, reachable by service name (no shared infra, no dev-broker conta
 docker compose up --build      # app :8080, Artemis console :8161, both admin/admin
 ```
 
+**The compose stack and the shared infra cannot both be up as-is**: compose's `artemis`
+publishes host :61616/:8161, which `dev-artemis` already holds. Either stop the shared infra
+or add a throwaway override that remaps them (`ports: !override` with `61617:61616` and
+`8162:8161`). The app still reaches `artemis:61616` in-network either way.
+
 The app reaches its siblings via env overrides in `compose.yaml`
 (`SPRING_ARTEMIS_BROKER_URL`, `JOLOKIA_URL`, `SPRING_DATA_REDIS_HOST`) — Spring relaxed
 binding over the localhost defaults in `application.properties`. This works because Redis
@@ -76,14 +81,16 @@ other than `dev` serves 404 on both routes. `SpringdocExposureTest` pins this.
   in `pom.xml` pins `-Dapi.version=1.44`; do not remove it. docker-java's default Docker
   API version (1.32) is below the 1.40 minimum enforced by Docker Engine 29+, which fails
   with the misleading "Could not find a valid Docker environment".
-- **`./mvnw test` does not run `MessageServiceIT`** — surefire's includes do not match
-  `*IT`. That is deliberate: `mvn test` stays fast and unit-only. **Use `./mvnw verify`**
-  to run it via failsafe. (Passing an explicit `-Dtest=...` filter to surefire also drags
+- **`./mvnw test` does not run `MessageServiceIT` or `McpServerIT`** — surefire's includes
+  do not match `*IT`. That is deliberate: `mvn test` stays fast and unit-only. **Use
+  `./mvnw verify`** to run them via failsafe. (Passing an explicit `-Dtest=...` filter to surefire also drags
   it in, which is not what you want — it will run without failsafe's setup.)
 - `MessageServiceIT` is **self-contained**: it starts its own Artemis container
   (`apache/activemq-artemis:2.31.2`, matching the dev stack), seeds its own message, and
   drains both queues before each test. It needs Docker but not the shared infra, and it
-  does not touch the dev broker. It is the only automated test that opens a JMS
+  does not touch the dev broker. `McpServerIT` follows the same pattern: its own Artemis
+  container (exposing 8161 too, for Jolokia), the app on a random port, and a real MCP SDK
+  client with real JWTs. These two are the only automated tests that open a JMS
   connection — everything else at the message level is Mockito-based.
 - `SecurityConfigTest` exercises the real filter chain (CORS preflight + a 401 on an
   unauthenticated request). It is **broker-independent** — the old
@@ -104,12 +111,14 @@ other than `dev` serves 404 on both routes. `SpringdocExposureTest` pins this.
 ## Architecture
 
 Layered packages under `com.message.inspector.message_inspector`. Both controllers are
-mapped under `/api`.
+mapped under `/api`; the MCP tools are served at `/mcp` (ADR 0009).
 
 ```
+agent/        QueueInspectionTools, QueueAdminTools, ToolAudit, ToolResults,
+              AgentAuthorizationAuditListener                      (MCP tools)
 config/       Application, Artemis, Redis, RestTemplate, Swagger wiring
 controller/   MessageController, QueueController
-dto/          ApiResponse, JmsMessageDto, JolokiaResponse
+dto/          ApiResponse, JmsMessageDto, JolokiaResponse, AgentMessageDto, AgentMessagePageDto
 integration/  artemis/  JmsMessageRepository                       (JMS)
               jolokia/  JolokiaRepository                          (HTTP/JMX)
               cache/    RedisQueueRepository                       (Redis)
@@ -207,6 +216,31 @@ last-used-queue preference. It is a cache of UI state, not application data.
   - Anything else → **500** via `/error`.
   - `ApiExceptionHandler` reuses `ApiResponse` so failures match the shape the
     destructive endpoints already return, rather than introducing a second error format.
+- **MCP server (`agent/`, ADR 0009).** Spring AI 2.0.2's WebMVC starter serves stateless
+  Streamable HTTP at `/mcp`, on in every profile. It needs no matcher of its own: it falls
+  under `anyRequest().authenticated()`, so a call without a token gets a 401 before any tool
+  runs. Things that are easy to break:
+  - **`@PreAuthorize` on `QueueAdminTools` only works because Spring AI invokes the proxy.**
+    `AgentToolSecurityTest.testAdminToolsAreProxied` pins it. Making the class or its
+    methods `final`, or registering tools some other way, would remove the ADMIN check
+    silently.
+  - **Denials are audited by an event listener, not by the tool.** A denied call never
+    enters the method. `SecurityConfig`'s `AuthorizationEventPublisher` bean is what makes
+    Spring Security publish `AuthorizationDeniedEvent`; remove it and `outcome=denied` lines
+    stop with no error anywhere.
+  - **Every tool that takes a queue name checks it against `fetchQueueNamesWithJolokia()`
+    first** (the auto-create gotcha above). A new tool must do the same.
+  - **Tools catch their own exceptions and return fixed text.** Spring AI's default puts
+    `getMessage()` into the result, and `requireValidMessageId`'s message echoes the ID.
+    Anything caller-supplied that reaches a log line goes through `ToolAudit.quote`,
+    including exception messages; a raw newline would forge an `AUDIT` line.
+  - **Resend is ADMIN-only over MCP but not over REST.** This is deliberate: it is not
+    idempotent and agents retry. Do not "fix" either side to match.
+  - **Kill switch:** `SPRING_AI_MCP_SERVER_ENABLED=false` removes `/mcp`, giving a 404 when
+    authenticated and a 401 when not. REST is unaffected.
+  - Startup logs Spring AI WARNs (`BeanPostProcessorChecker` on its scanner beans, "No
+    resource/prompt/complete methods found"). They are upstream noise; the proxy test is
+    what matters.
 
 ## Conventions
 
