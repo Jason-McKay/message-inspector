@@ -21,7 +21,7 @@ full-stack app:
 
 - Backend: this repo.
 - Frontend: `message-inspector-ui` (Angular 22.2.4, Node 24.18.0, :4200).
-- Shared dev infra: `infrastructure` (separate repo, local only).
+- Shared dev infra: `infrastructure` (separate repo, private).
 - Roadmap: a local planning doc kept outside the repo — phased plan with the
   current phase, known gaps, and deliberately deferred work. **Read it before starting
   non-trivial work**; it explains why several rough edges below are still rough.
@@ -42,12 +42,19 @@ Maven wrapper (`./mvnw` in Bash, `.\mvnw.cmd` in PowerShell):
 For the **dev loop** (edit + `spring-boot:run` / `mvnw`), bring the shared infra up first
 from `../infrastructure` — it provides the broker + Redis the locally-run app talks to:
 
-```bash
-cd ../infrastructure && docker compose up -d && ./test-containers.sh
+```powershell
+cd ..\infrastructure; .\up.ps1; bash ./test-containers.sh
 ```
 
 That brings up Artemis 2.31.2 (:61616 JMS, :8161 console/Jolokia), Redis (:6379), and
-MySQL (unused by this app). Credentials are `admin`/`admin` throughout local dev.
+MySQL (unused by this app). `up.ps1` loads the MySQL and Redis passwords from the local
+secret store; plain `docker compose up -d` in that folder refuses to start without them. If
+`bash` resolves to WSL's (no Docker there), run `test-containers.sh` from Git Bash instead.
+
+**Redis needs a password; only Artemis still uses `admin`/`admin`.** Load `REDIS_PASSWORD`
+into the shell before `spring-boot:run` (README, *Dev loop*, step 2), or the app cannot
+authenticate to the shared Redis. Unset means no AUTH, which is right only for the
+self-contained compose stack below.
 
 For a **one-command run of the whole backend** (Phase 7), this repo's `compose.yaml` is now
 a self-contained stack — it **builds the app image** (`Dockerfile`) and wires it to its own
