@@ -2,6 +2,17 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+**This file holds the rules; the reasons are in `docs/`.** Until 2026-10-31 the incident or
+fix behind each rule was in here too, loaded into every session; it moved word for word into
+the files below, and here each rule is a line or two. **Read a rule's reason before changing
+or deleting it.** New reasoning goes in the matching `docs/` file, not here. Decisions are in
+`docs/adr/`, which the split did not touch.
+
+| Topic | Reasons in |
+|---|---|
+| The Docker API pin, the `*IT` split, the self-contained ITs, the manual JMS pass, the orphaned JVM | `docs/testing.md` |
+| Queue discovery, truthful results, the DLQ name, `ArtemisConfig`, selectors, security, destination names, error mapping, the MCP server | `docs/gotchas.md` |
+
 ## What this is
 
 Backend of Message Inspector: a Spring Boot 4.1 / Java 21 tool to browse, resend, delete,
@@ -77,36 +88,28 @@ other than `dev` serves 404 on both routes. `SpringdocExposureTest` pins this.
 
 ### Testing notes
 
-- Several tests use **Testcontainers and need Docker running**. The surefire `argLine`
-  in `pom.xml` pins `-Dapi.version=1.44`; do not remove it. docker-java's default Docker
-  API version (1.32) is below the 1.40 minimum enforced by Docker Engine 29+, which fails
-  with the misleading "Could not find a valid Docker environment".
-- **`./mvnw test` does not run `MessageServiceIT` or `McpServerIT`** — surefire's includes
-  do not match `*IT`. That is deliberate: `mvn test` stays fast and unit-only. **Use
-  `./mvnw verify`** to run them via failsafe. (Passing an explicit `-Dtest=...` filter to surefire also drags
-  it in, which is not what you want — it will run without failsafe's setup.)
-- `MessageServiceIT` is **self-contained**: it starts its own Artemis container
-  (`apache/activemq-artemis:2.31.2`, matching the dev stack), seeds its own message, and
-  drains both queues before each test. It needs Docker but not the shared infra, and it
-  does not touch the dev broker. `McpServerIT` follows the same pattern: its own Artemis
-  container (exposing 8161 too, for Jolokia), the app on a random port, and a real MCP SDK
-  client with real JWTs. These two are the only automated tests that open a JMS
-  connection — everything else at the message level is Mockito-based.
-- `SecurityConfigTest` exercises the real filter chain (CORS preflight + a 401 on an
-  unauthenticated request). It is **broker-independent** — the old
-  `testApiIsCurrentlyPermittedWithoutAuthentication`, which hit the live Jolokia path and
-  needed the shared infra, was replaced in Phase 4 by `testApiRequiresAuthentication`
-  (security rejects before any controller/broker call). The whole `./mvnw test` suite now
-  passes with the shared infra down, given Docker is up for the Testcontainers tests.
+Rules, with the reasons in `docs/testing.md`:
+
+- **Several tests use Testcontainers and need Docker running.** Do not remove the surefire
+  `argLine` pin `-Dapi.version=1.44` in `pom.xml`; without it Docker Engine 29+ fails with
+  the misleading "Could not find a valid Docker environment".
+- **`./mvnw test` does not run `MessageServiceIT` or `McpServerIT`** — deliberate, so
+  `mvn test` stays fast and unit-only. **Use `./mvnw verify`** to run them via failsafe, not
+  an explicit `-Dtest=...` filter, which runs them without failsafe's setup.
+- **The two ITs are self-contained**: each starts its own Artemis container
+  (`apache/activemq-artemis:2.31.2`), needs Docker but not the shared infra, and does not
+  touch the dev broker. They are the only automated tests that open a JMS connection —
+  everything else at the message level is Mockito-based.
+- **The whole `./mvnw test` suite passes with the shared infra down**, given Docker is up.
+  `SecurityConfigTest` is broker-independent.
 - **Verify JMS changes by hand.** Boot the app, produce with
   `MSYS_NO_PATHCONV=1 docker exec dev-artemis /opt/activemq-artemis/bin/artemis producer
   --url tcp://localhost:61616 --destination queue://DLQ --message-count 3 --user admin
   --password admin`, then exercise browse / get-by-id / delete / resend / move-to-dlq.
   This pass has caught real bugs the suite could not see. Clean up afterwards: purge the
   DLQ and delete any `DLQ_test` or `ActiveMQQueue[DLQ]` addresses it leaves behind.
-- **`spring-boot:run` in the background outlives its Maven wrapper.** Killing the wrapper
-  task leaves the forked JVM holding :8080, and the next run fails with "Port 8080 was
-  already in use". Kill the `java` process by port, not the wrapper.
+- **`spring-boot:run` in the background outlives its Maven wrapper.** Kill the `java` process
+  holding :8080 by port, not the wrapper.
 
 ## Architecture
 
@@ -149,98 +152,55 @@ last-used-queue preference. It is a cache of UI state, not application data.
 
 ### Gotchas
 
-- **Only one queue-discovery route exists: `/api/queues/artemis-jolokia/names`.** There
-  used to be two more — `/artemis-straight` (JMS) and `/artemis-jolokia` (Jolokia,
-  queue-list shape) — both of which always returned `[]` for different swallowed reasons.
-  They were **deleted 2026-07-24** along with their backing code (`JmsQueueRepository`,
-  `JolokiaRepository.fetchQueuesWithJolokia`, and the `JmsQueueDto`/`JolokiaReadResponse`
-  DTOs), because only the names route ever worked and the dropdown already uses it.
-- **`delete`, `move-to-dlq` and `resend` all report truthfully on a missing message**
-  (fixed Phase 4). `deleteMessageById`/`moveToDeadLetterQueue` return `boolean`, and
-  `MessageService` sets `success=false, "Message not found."` for a no-op rather than a
-  false success. `MessageServiceIT` covers the missing-message case for all three.
+Rules, with the reasons in `docs/gotchas.md`:
+
+- **Only one queue-discovery route exists: `/api/queues/artemis-jolokia/names`.** It returns
+  a bare JSON array; the Jolokia envelope is unwrapped in `JolokiaRepository` and never
+  crosses the repository boundary.
+- **`delete`, `move-to-dlq` and `resend` all report truthfully on a missing message**:
+  `success=false, "Message not found."`, never a false success. `MessageServiceIT` covers all
+  three.
 - **The DLQ target is the `message-inspector.dlq-name` property (default `DLQ`)**, read by
-  `JmsMessageRepository` — not a hardcoded address. The old `DLQ_NAME = "DLQ_test"` constant
-  (which made "Move to DLQ" write to an app-invented address) was replaced in Phase 4 and
-  removed entirely with `JmsQueueRepository` on 2026-07-24.
+  `JmsMessageRepository` — not a hardcoded address.
 - **Browsing a queue that does not exist auto-creates the address**, so typos permanently
   pollute the queue list on the dev broker.
-- ~~**The Jolokia envelope leaks to the client.**~~ **FIXED 2026-07-23**:
-  `/artemis-jolokia/names` returns a bare JSON array; the JMX envelope is unwrapped in
-  `JolokiaRepository` (where `JolokiaResponse` remains the deserialization target — it
-  just never crosses the repository boundary any more). Coordinated with the frontend,
-  whose `QueueService` was made tolerant of both shapes first.
 - **`ArtemisConfig` builds its own `ConnectionFactory`** rather than using Boot's, which
-  `spring.main.allow-bean-definition-overriding=true` is what permits. It now *reads*
-  `spring.artemis.broker-url`/`user`/`password` (defaults match the local stack), so
-  those properties are live — they used to be hardcoded and therefore inert, which is
-  why `MessageServiceIT` could only ever target `localhost:61616` and now can point at a
-  container. Jolokia credentials (`JOLOKIA_USER`/`JOLOKIA_PASSWORD`) are wired via
-  `RestTemplateConfig`.
+  `spring.main.allow-bean-definition-overriding=true` is what permits. It reads
+  `spring.artemis.broker-url`/`user`/`password`; Jolokia credentials
+  (`JOLOKIA_USER`/`JOLOKIA_PASSWORD`) are wired via `RestTemplateConfig`.
 - **JMS selectors are built by string concatenation.** `JmsMessageRepository` guards every
   such path with `requireValidMessageId` against `SAFE_MESSAGE_ID`. Any new selector-taking
   method must call it too — without it, an ID like `x' OR '1'='1` widens the selector and
   the wrong message gets consumed or DLQ'd.
 - **`SecurityConfig` requires a bearer token on everything** except `/api/auth/login`,
-  `/error` and the dev-only Swagger routes (Phase 4; the Phase 2 permit-all on `/api/**`
-  is gone). Auth is stateless JWT — `oauth2ResourceServer`, `SessionCreationPolicy.STATELESS`
-  — so CSRF stays disabled without opening a hole, and CORS sets `allowCredentials(false)`;
-  the old tripwire about re-enabling CSRF applies only if auth ever moves to cookies.
-  Role gating for the destructive endpoints is **method security**
-  (`@PreAuthorize("hasRole('ADMIN')")` on `MessageController`), not path matchers, because
-  `move-to-dlq` sits mid-path and PathPattern rejects a `**` in the middle. The token's
-  bare `roles` claim is mapped to `ROLE_`-prefixed authorities by a
-  `JwtAuthenticationConverter`.
+  `/error` and the dev-only Swagger routes. Stateless JWT, so CSRF stays disabled (that
+  changes only if auth moves to cookies). ADMIN gating is **method security** on
+  `MessageController`, not path matchers — PathPattern rejects a `**` mid-path.
 - `jolokiaRestTemplate` registers a Jackson converter for `text/plain` because Jolokia
   returns JSON under that content type.
-- **Destination names must come from `getQueueName()`, not `toString()`.** On Artemis,
-  `destination.toString()` yields `ActiveMQQueue[DLQ]` rather than `DLQ`. `convertToDto`
-  used to do exactly that, which put the wrong name in front of the user *and* broke
-  resend, because `resendMessage` fed the value back into `sendMessage` and delivered to
-  an address literally named `ActiveMQQueue[DLQ]` while reporting success. Fixed
-  2026-07-21 via `destinationName(...)`; `resendMessage` also now uses the caller's queue
-  name rather than the one round-tripped through the DTO. `MessageServiceIT` pins both.
-  Note the mock-based tests could never catch this — they supply a clean queue name the
-  real code path did not produce.
-- **Error responses** (fixed 2026-07-21; `/error` used to be unpermitted, which turned
-  *every* server error into a misleading 403). Current mapping, all verified against a
-  live broker:
-  - `IllegalArgumentException` (the `SAFE_MESSAGE_ID` guard) → **400**, with a generic
-    message; the offending input is deliberately not echoed back.
-  - `jakarta.jms.JMSException` → **502**, on the grounds that the broker is an upstream
-    dependency. A browse against a stopped broker returns
-    `{"success":false,"message":"Broker unavailable: ..."}`.
-  - `JolokiaAccessException` → **502**, same upstream-dependency reasoning:
-    `fetchQueueNamesWithJolokia` wraps its failures in this type (fixed 2026-07-23;
-    they used to be bare `RuntimeException`s that fell through to 500).
-  - Anything else → **500** via `/error`.
-  - `ApiExceptionHandler` reuses `ApiResponse` so failures match the shape the
-    destructive endpoints already return, rather than introducing a second error format.
-- **MCP server (`agent/`, ADR 0009).** Spring AI 2.0.2's WebMVC starter serves stateless
-  Streamable HTTP at `/mcp`, on in every profile. It needs no matcher of its own: it falls
-  under `anyRequest().authenticated()`, so a call without a token gets a 401 before any tool
-  runs. Things that are easy to break:
+- **Destination names must come from `getQueueName()`, not `toString()`**, which yields
+  `ActiveMQQueue[DLQ]` on Artemis. `MessageServiceIT` pins it; the mock-based tests cannot.
+- **Error responses**, in `ApiResponse`'s shape via `ApiExceptionHandler`: the
+  `SAFE_MESSAGE_ID` guard → **400** without echoing the input; `JMSException` and
+  `JolokiaAccessException` → **502**; anything else → **500** via `/error`, which must stay
+  permitted or every server error becomes a misleading 403.
+- **MCP server (`agent/`, ADR 0009).** Spring AI's WebMVC starter serves stateless
+  Streamable HTTP at `/mcp`, on in every profile, under `anyRequest().authenticated()`, so a
+  call without a token gets a 401 before any tool runs. Things that are easy to break:
   - **`@PreAuthorize` on `QueueAdminTools` only works because Spring AI invokes the proxy.**
-    `AgentToolSecurityTest.testAdminToolsAreProxied` pins it. Making the class or its
-    methods `final`, or registering tools some other way, would remove the ADMIN check
-    silently.
-  - **Denials are audited by an event listener, not by the tool.** A denied call never
-    enters the method. `SecurityConfig`'s `AuthorizationEventPublisher` bean is what makes
-    Spring Security publish `AuthorizationDeniedEvent`; remove it and `outcome=denied` lines
-    stop with no error anywhere.
+    Do not make the class or its methods `final` or register tools another way;
+    `AgentToolSecurityTest.testAdminToolsAreProxied` pins it.
+  - **Denials are audited by an event listener, not by the tool.** Remove `SecurityConfig`'s
+    `AuthorizationEventPublisher` bean and `outcome=denied` lines stop with no error anywhere.
   - **Every tool that takes a queue name checks it against `fetchQueueNamesWithJolokia()`
     first** (the auto-create gotcha above). A new tool must do the same.
-  - **Tools catch their own exceptions and return fixed text.** Spring AI's default puts
-    `getMessage()` into the result, and `requireValidMessageId`'s message echoes the ID.
-    Anything caller-supplied that reaches a log line goes through `ToolAudit.quote`,
-    including exception messages; a raw newline would forge an `AUDIT` line.
+  - **Tools catch their own exceptions and return fixed text.** Anything caller-supplied
+    that reaches a log line goes through `ToolAudit.quote`, including exception messages.
   - **Resend is ADMIN-only over MCP but not over REST.** This is deliberate: it is not
     idempotent and agents retry. Do not "fix" either side to match.
   - **Kill switch:** `SPRING_AI_MCP_SERVER_ENABLED=false` removes `/mcp`, giving a 404 when
     authenticated and a 401 when not. REST is unaffected.
-  - Startup logs Spring AI WARNs (`BeanPostProcessorChecker` on its scanner beans, "No
-    resource/prompt/complete methods found"). They are upstream noise; the proxy test is
-    what matters.
+  - Spring AI's startup WARNs are upstream noise; the proxy test is what matters.
 
 ## Conventions
 
