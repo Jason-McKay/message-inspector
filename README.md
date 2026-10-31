@@ -81,15 +81,20 @@ Needs **JDK 21** and **Docker** (for the broker and Redis).
 
 1. **Infrastructure** — start the shared dev stack (Artemis + Redis) from the sibling
    `infrastructure/` directory:
-   ```bash
-   cd ../infrastructure && docker compose up -d && ./test-containers.sh
+   ```powershell
+   cd ..\infrastructure; .\up.ps1; bash ./test-containers.sh
    ```
-   Artemis: JMS on `:61616`, console/Jolokia on `:8161`. Redis on `:6379`. All dev
-   credentials are `admin`/`admin`.
+   `up.ps1` loads the MySQL and Redis passwords from the local secret store before running
+   `docker compose up -d` (plain `docker compose` in that folder refuses to start without them).
+   Artemis: JMS on `:61616`, console/Jolokia on `:8161`. Redis on `:6379`, password required.
+   Only Artemis still uses `admin`/`admin`.
 
-2. **Backend**:
-   ```bash
-   ./mvnw spring-boot:run        # .\mvnw.cmd on PowerShell
+2. **Backend** - load `REDIS_PASSWORD` into the shell first, or the app cannot authenticate to
+   the shared Redis (it maps to `spring.data.redis.password`; unset means no AUTH, which is right
+   only for the self-contained compose stack above). Process scope only, never a saved variable:
+   ```powershell
+   Import-Module ..\life-api\scripts\VantageSecrets.psm1; Import-VantageSecrets -Name REDIS_PASSWORD
+   .\mvnw.cmd spring-boot:run    # ./mvnw spring-boot:run in bash, with REDIS_PASSWORD exported
    ```
    Boots on `:8080`. Log in with `jason`/`jason` (USER) or `admin`/`admin` (ADMIN).
 
