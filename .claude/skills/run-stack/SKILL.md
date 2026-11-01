@@ -14,18 +14,24 @@ From `../infrastructure` — **not** this repo's bare `compose.yaml` (no fixed p
 mapping, Artemis only):
 
 ```bash
-cd ../infrastructure && docker compose up -d && ./test-containers.sh
+cd ../infrastructure && powershell -NoProfile -Command '& ./up.ps1; exit $LASTEXITCODE' && ./test-containers.sh
 ```
 
-Brings up Artemis 2.31.2 (:61616 JMS, :8161 console/Jolokia), Redis (:6379), MySQL
-(unused here). All creds `admin`/`admin`. Wait for `test-containers.sh` to pass before
-starting the backend — `SecurityConfigTest` and the live Jolokia path fail confusingly
-if infra is down.
+`up.ps1` loads the MySQL and Redis passwords from the local secret store and runs
+`docker compose up -d`; plain `docker compose` in that folder refuses to start without them.
+Keep the single quotes (Git Bash expands `$` inside double quotes). Brings up Artemis 2.31.2
+(:61616 JMS, :8161 console/Jolokia), Redis (:6379, password required), MySQL (unused here).
+Only Artemis still uses `admin`/`admin`. Wait for `test-containers.sh` to pass before
+starting the backend — the live Jolokia path fails confusingly if infra is down.
 
 ## 2. Backend (:8080)
 
-```bash
-./mvnw spring-boot:run        # .\mvnw.cmd in PowerShell
+From PowerShell, with `REDIS_PASSWORD` loaded into the process first (unset means no AUTH,
+and the shared Redis refuses the app):
+
+```powershell
+Import-Module ..\life-api\scripts\VantageSecrets.psm1; Import-VantageSecrets -Name REDIS_PASSWORD
+.\mvnw.cmd spring-boot:run
 ```
 
 Run in the background for long sessions. Verify: `http://localhost:8080/api/swagger-ui.html`
