@@ -47,21 +47,23 @@ cd ..\infrastructure; .\up.ps1; bash ./test-containers.sh
 ```
 
 That brings up Artemis 2.31.2 (:61616 JMS, :8161 console/Jolokia), Redis (:6379), and
-MySQL (unused by this app). `up.ps1` loads the MySQL and Redis passwords from the local
-secret store; plain `docker compose up -d` in that folder refuses to start without them. If
+MySQL (unused by this app). `up.ps1` loads the MySQL, Redis and Artemis passwords from the
+local secret store; plain `docker compose up -d` in that folder refuses to start without them. If
 `bash` resolves to WSL's (no Docker there), run `test-containers.sh` from Git Bash instead.
 
-**Redis needs a password; only Artemis still uses `admin`/`admin`.** Load `REDIS_PASSWORD`
-into the shell before `spring-boot:run` (README, *Dev loop*, step 2), or the app cannot
-authenticate to the shared Redis. Unset means no AUTH, which is right only for the
-self-contained compose stack below.
+**Redis and Artemis both need a password (Artemis since 2026-11-10).** Load `REDIS_PASSWORD`
+and `ARTEMIS_PASSWORD` into the shell before `spring-boot:run` (README, *Dev loop*, step 2).
+`ARTEMIS_PASSWORD` has no default anywhere (`ArtemisCredentialsConfigTest` pins it): unset, the
+app fails at startup on the placeholder; `jolokia.password` follows it unless `JOLOKIA_PASSWORD`
+is set. Surefire supplies a test-only value, so `./mvnw test` needs neither. Unset
+`REDIS_PASSWORD` means no AUTH, which is right only for the self-contained compose stack below.
 
 For a **one-command run of the whole backend** (Phase 7), this repo's `compose.yaml` is now
 a self-contained stack — it **builds the app image** (`Dockerfile`) and wires it to its own
 Artemis + Redis, reachable by service name (no shared infra, no dev-broker contact):
 
 ```bash
-docker compose up --build      # app :8080, Artemis console :8161, both admin/admin
+docker compose up --build      # app :8080, Artemis console :8161 (its own throwaway admin/admin)
 ```
 
 **The compose stack and the shared infra cannot both be up as-is**: compose's `artemis`
@@ -110,9 +112,11 @@ Rules, with the reasons in `docs/testing.md`:
 - **The whole `./mvnw test` suite passes with the shared infra down**, given Docker is up.
   `SecurityConfigTest` is broker-independent.
 - **Verify JMS changes by hand.** Boot the app, produce with
-  `MSYS_NO_PATHCONV=1 docker exec dev-artemis /opt/activemq-artemis/bin/artemis producer
-  --url tcp://localhost:61616 --destination queue://DLQ --message-count 3 --user admin
-  --password admin`, then exercise browse / get-by-id / delete / resend / move-to-dlq.
+  `MSYS_NO_PATHCONV=1 docker exec dev-artemis sh -c 'exec /opt/activemq-artemis/bin/artemis
+  producer --url tcp://localhost:61616 --destination queue://DLQ --message-count 3
+  --user "$ARTEMIS_USER" --password "$ARTEMIS_PASSWORD"'` (single quotes: the container's own
+  env supplies the login, so it never appears on the host), then exercise browse / get-by-id /
+  delete / resend / move-to-dlq.
   This pass has caught real bugs the suite could not see. Clean up afterwards: purge the
   DLQ and delete any `DLQ_test` or `ActiveMQQueue[DLQ]` addresses it leaves behind.
 - **`spring-boot:run` in the background outlives its Maven wrapper.** Kill the `java` process
@@ -173,8 +177,9 @@ Rules, with the reasons in `docs/gotchas.md`:
   pollute the queue list on the dev broker.
 - **`ArtemisConfig` builds its own `ConnectionFactory`** rather than using Boot's, which
   `spring.main.allow-bean-definition-overriding=true` is what permits. It reads
-  `spring.artemis.broker-url`/`user`/`password`; Jolokia credentials
-  (`JOLOKIA_USER`/`JOLOKIA_PASSWORD`) are wired via `RestTemplateConfig`.
+  `spring.artemis.broker-url`/`user`/`password`, the password with no default; Jolokia
+  credentials (`JOLOKIA_USER`/`JOLOKIA_PASSWORD`, the password defaulting to
+  `spring.artemis.password`) are wired via `RestTemplateConfig`.
 - **JMS selectors are built by string concatenation.** `JmsMessageRepository` guards every
   such path with `requireValidMessageId` against `SAFE_MESSAGE_ID`. Any new selector-taking
   method must call it too — without it, an ID like `x' OR '1'='1` widens the selector and

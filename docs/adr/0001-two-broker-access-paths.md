@@ -58,7 +58,9 @@ Neither is a fallback for the other.
 **Accepted costs:**
 
 - **Two sets of credentials and two failure modes.** `ARTEMIS_USER`/`ARTEMIS_PASSWORD`
-  govern JMS; `JOLOKIA_USER`/`JOLOKIA_PASSWORD` govern Jolokia. The broker can be
+  govern JMS; `JOLOKIA_USER`/`JOLOKIA_PASSWORD` govern Jolokia. (Since 2026-11-10 the
+  Jolokia password defaults to the JMS one, and the JMS one has no default, so a single
+  `ARTEMIS_PASSWORD` serves both unless they really differ.) The broker can be
   reachable on one and not the other — queue discovery can fail while message operations
   work, and vice versa. Anyone debugging "the broker is down" must establish *which* path
   is down.

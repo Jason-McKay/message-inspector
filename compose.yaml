@@ -47,6 +47,10 @@ services:
       SPRING_ARTEMIS_BROKER_URL: tcp://artemis:61616
       JOLOKIA_URL: http://artemis:8161/console/jolokia
       SPRING_DATA_REDIS_HOST: redis
-      # Broker/Jolokia creds default to admin/admin, matching the artemis service above.
+      # The app has no broker password default (since 2026-11-10), so this throwaway
+      # stack passes its own broker's admin/admin explicitly. It is not the shared
+      # ../infrastructure broker, whose password lives in the DPAPI store.
+      ARTEMIS_PASSWORD: admin
+      JOLOKIA_PASSWORD: admin
     ports:
       - "8080:8080"

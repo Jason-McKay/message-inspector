@@ -71,9 +71,10 @@ and wires it to its own Artemis + Redis (self-contained — it does **not** use 
 docker compose up --build
 ```
 
-App on `:8080` (Swagger at `/api/swagger-ui.html`), Artemis console on `:8161`, all
-credentials `admin`/`admin`. The app reaches its siblings by service name via env overrides
-in the compose file.
+App on `:8080` (Swagger at `/api/swagger-ui.html`), Artemis console on `:8161`. This
+throwaway broker's login is `admin`/`admin`, passed to the app explicitly in the compose file
+(the app itself has no broker password default since 2026-11-10). The app reaches its siblings
+by service name via env overrides in the compose file.
 
 ### Dev loop — run from source
 
@@ -84,17 +85,20 @@ Needs **JDK 21** and **Docker** (for the broker and Redis).
    ```powershell
    cd ..\infrastructure; .\up.ps1; bash ./test-containers.sh
    ```
-   `up.ps1` loads the MySQL and Redis passwords from the local secret store before running
-   `docker compose up -d` (plain `docker compose` in that folder refuses to start without them).
-   Artemis: JMS on `:61616`, console/Jolokia on `:8161`. Redis on `:6379`, password required.
-   Only Artemis still uses `admin`/`admin`.
+   `up.ps1` loads the MySQL, Redis and Artemis passwords from the local secret store before
+   running `docker compose up -d` (plain `docker compose` in that folder refuses to start without
+   them). Artemis: JMS on `:61616`, console/Jolokia on `:8161`, user `admin`, password required
+   (since 2026-11-10). Redis on `:6379`, password required.
 
-2. **Backend** - load `REDIS_PASSWORD` into the shell first, or the app cannot authenticate to
-   the shared Redis (it maps to `spring.data.redis.password`; unset means no AUTH, which is right
-   only for the self-contained compose stack above). Process scope only, never a saved variable:
+2. **Backend** - load `REDIS_PASSWORD` and `ARTEMIS_PASSWORD` into the shell first. Without
+   `ARTEMIS_PASSWORD` the app refuses to start (`Could not resolve placeholder
+   'ARTEMIS_PASSWORD'`); Jolokia uses the same value unless `JOLOKIA_PASSWORD` is set. Without
+   `REDIS_PASSWORD` it cannot authenticate to the shared Redis (it maps to
+   `spring.data.redis.password`; unset means no AUTH, which is right only for the self-contained
+   compose stack above). Process scope only, never a saved variable:
    ```powershell
-   Import-Module ..\life-api\scripts\VantageSecrets.psm1; Import-VantageSecrets -Name REDIS_PASSWORD
-   .\mvnw.cmd spring-boot:run    # ./mvnw spring-boot:run in bash, with REDIS_PASSWORD exported
+   Import-Module ..\life-api\scripts\VantageSecrets.psm1; Import-VantageSecrets -Name REDIS_PASSWORD, ARTEMIS_PASSWORD
+   .\mvnw.cmd spring-boot:run    # ./mvnw spring-boot:run in bash, with both exported
    ```
    Boots on `:8080`. Log in with `jason`/`jason` (USER) or `admin`/`admin` (ADMIN).
 
