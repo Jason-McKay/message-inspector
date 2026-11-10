@@ -15,18 +15,19 @@ import org.springframework.jms.core.JmsTemplate;
 @EnableJms
 public class ArtemisConfig {
 
-  // Defaults match the previous hardcoded values and the local docker-compose stack in
-  // ../infrastructure, so behaviour is unchanged where nothing overrides them. They are
-  // read from properties rather than baked in so that a test (or any non-local
+  // Read from properties rather than baked in so that a test (or any non-local
   // deployment) can point the JmsTemplate at a different broker -- previously
   // impossible, which is why MessageServiceIT could only ever run against localhost.
+  // The URL and user default to the local stack in ../infrastructure. The password
+  // deliberately has no default (since 2026-11-10): a missing ARTEMIS_PASSWORD fails
+  // startup instead of silently trying admin. ArtemisCredentialsConfigTest pins this.
   @Value("${spring.artemis.broker-url:tcp://localhost:61616}")
   private String brokerUrl;
 
   @Value("${spring.artemis.user:admin}")
   private String username;
 
-  @Value("${spring.artemis.password:admin}")
+  @Value("${spring.artemis.password}")
   private String password;
 
   @Bean

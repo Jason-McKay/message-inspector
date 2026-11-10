@@ -182,6 +182,14 @@
                          a docker-CLI-only variable; docker-java reads this system property instead.
                          Engine 29.1 accepts 1.44 (its minimum) through 1.52. -->
                     <argLine>-Djdk.attach.allowAttachSelf -XX:+EnableDynamicAgentLoading -Dapi.version=1.44</argLine>
+                    <!-- spring.artemis.password has no default (ARTEMIS_PASSWORD is required), so the
+                         plain @SpringBootTest contexts, here and in CI, need a value to resolve. It
+                         is not a broker password: nothing in ./mvnw test opens a JMS connection.
+                         The *ITs under Failsafe set their Testcontainers broker's own login through
+                         @DynamicPropertySource instead. -->
+                    <systemPropertyVariables>
+                        <ARTEMIS_PASSWORD>test-only-not-a-broker-password</ARTEMIS_PASSWORD>
+                    </systemPropertyVariables>
                 </configuration>
             </plugin>
 

@@ -27,7 +27,8 @@ text below says "this file", it means `CLAUDE.md` as it stood when the passage w
   whose `QueueService` was made tolerant of both shapes first.
 - **`ArtemisConfig` builds its own `ConnectionFactory`** rather than using Boot's, which
   `spring.main.allow-bean-definition-overriding=true` is what permits. It now *reads*
-  `spring.artemis.broker-url`/`user`/`password` (defaults match the local stack), so
+  `spring.artemis.broker-url`/`user`/`password` (URL and user default to the local stack;
+  the password has no default since 2026-11-10), so
   those properties are live — they used to be hardcoded and therefore inert, which is
   why `MessageServiceIT` could only ever target `localhost:61616` and now can point at a
   container. Jolokia credentials (`JOLOKIA_USER`/`JOLOKIA_PASSWORD`) are wired via

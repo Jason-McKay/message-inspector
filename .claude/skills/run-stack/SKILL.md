@@ -17,20 +17,21 @@ mapping, Artemis only):
 cd ../infrastructure && powershell -NoProfile -Command '& ./up.ps1; exit $LASTEXITCODE' && ./test-containers.sh
 ```
 
-`up.ps1` loads the MySQL and Redis passwords from the local secret store and runs
+`up.ps1` loads the MySQL, Redis and Artemis passwords from the local secret store and runs
 `docker compose up -d`; plain `docker compose` in that folder refuses to start without them.
 Keep the single quotes (Git Bash expands `$` inside double quotes). Brings up Artemis 2.31.2
-(:61616 JMS, :8161 console/Jolokia), Redis (:6379, password required), MySQL (unused here).
-Only Artemis still uses `admin`/`admin`. Wait for `test-containers.sh` to pass before
+(:61616 JMS, :8161 console/Jolokia, user `admin`, password required), Redis (:6379, password
+required), MySQL (unused here). Wait for `test-containers.sh` to pass before
 starting the backend — the live Jolokia path fails confusingly if infra is down.
 
 ## 2. Backend (:8080)
 
-From PowerShell, with `REDIS_PASSWORD` loaded into the process first (unset means no AUTH,
-and the shared Redis refuses the app):
+From PowerShell, with `REDIS_PASSWORD` and `ARTEMIS_PASSWORD` loaded into the process first
+(unset `REDIS_PASSWORD` means no AUTH and the shared Redis refuses the app; unset
+`ARTEMIS_PASSWORD` fails startup on the placeholder):
 
 ```powershell
-Import-Module ..\life-api\scripts\VantageSecrets.psm1; Import-VantageSecrets -Name REDIS_PASSWORD
+Import-Module ..\life-api\scripts\VantageSecrets.psm1; Import-VantageSecrets -Name REDIS_PASSWORD, ARTEMIS_PASSWORD
 .\mvnw.cmd spring-boot:run
 ```
 
@@ -55,9 +56,10 @@ Headless tests there: `npx ng test --watch=false --browsers=ChromeHeadless`; lin
 ## Seeding test messages
 
 ```bash
-MSYS_NO_PATHCONV=1 docker exec dev-artemis /opt/activemq-artemis/bin/artemis producer \
+MSYS_NO_PATHCONV=1 docker exec dev-artemis sh -c 'exec /opt/activemq-artemis/bin/artemis producer \
   --url tcp://localhost:61616 --destination queue://DLQ --message-count 3 \
-  --user admin --password admin
+  --user "$ARTEMIS_USER" --password "$ARTEMIS_PASSWORD"'
+# Single quotes: the container's own env supplies the login, so it never appears on the host.
 ```
 
 Clean up afterwards: purge the queue and delete any `DLQ_test` / `ActiveMQQueue[DLQ]`

@@ -26,9 +26,11 @@ text below says "this file", it means `CLAUDE.md` as it stood when the passage w
   (security rejects before any controller/broker call). The whole `./mvnw test` suite now
   passes with the shared infra down, given Docker is up for the Testcontainers tests.
 - **Verify JMS changes by hand.** Boot the app, produce with
-  `MSYS_NO_PATHCONV=1 docker exec dev-artemis /opt/activemq-artemis/bin/artemis producer
-  --url tcp://localhost:61616 --destination queue://DLQ --message-count 3 --user admin
-  --password admin`, then exercise browse / get-by-id / delete / resend / move-to-dlq.
+  `MSYS_NO_PATHCONV=1 docker exec dev-artemis sh -c 'exec /opt/activemq-artemis/bin/artemis
+  producer --url tcp://localhost:61616 --destination queue://DLQ --message-count 3
+  --user "$ARTEMIS_USER" --password "$ARTEMIS_PASSWORD"'` (single quotes: the container's own
+  env supplies the login, so it never appears on the host), then exercise browse / get-by-id /
+  delete / resend / move-to-dlq.
   This pass has caught real bugs the suite could not see. Clean up afterwards: purge the
   DLQ and delete any `DLQ_test` or `ActiveMQQueue[DLQ]` addresses it leaves behind.
 - **`spring-boot:run` in the background outlives its Maven wrapper.** Killing the wrapper
